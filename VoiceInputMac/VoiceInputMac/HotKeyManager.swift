@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Foundation
 
 final class HotKeyManager {
@@ -6,16 +7,20 @@ final class HotKeyManager {
     private var activeMode: PipelineMode?
     private var onPress: ((PipelineMode) -> Void)?
     private var onRelease: ((PipelineMode) -> Void)?
+    private var onEventDebug: ((String) -> Void)?
     private var dictationHotkey = HotKeyDefinition.defaultDictation
     private var editSelectionHotkey = HotKeyDefinition.defaultEditSelection
     private var hotkeyMode: HotkeyMode = .pressToTalk
+    private let carbonMonitor = CarbonHotKeyMonitor()
+    private var carbonRegisteredModes = Set<PipelineMode>()
 
     func start(
         dictationHotkey: String,
         editSelectionHotkey: String,
         hotkeyMode: HotkeyMode,
         onPress: @escaping (PipelineMode) -> Void,
-        onRelease: @escaping (PipelineMode) -> Void
+        onRelease: @escaping (PipelineMode) -> Void,
+        onEventDebug: @escaping (String) -> Void
     ) {
         stop()
         self.dictationHotkey = HotKeyDefinition(rawValue: dictationHotkey) ?? .defaultDictation
@@ -23,6 +28,9 @@ final class HotKeyManager {
         self.hotkeyMode = hotkeyMode
         self.onPress = onPress
         self.onRelease = onRelease
+        self.onEventDebug = onEventDebug
+
+        registerCarbonHotkeys()
 
         let handler: (NSEvent) -> Void = { [weak self] event in
             self?.handle(event)
@@ -44,6 +52,8 @@ final class HotKeyManager {
             NSEvent.removeMonitor(monitor)
         }
         monitors.removeAll()
+        carbonMonitor.stop()
+        carbonRegisteredModes.removeAll()
         activeMode = nil
     }
 
@@ -51,10 +61,13 @@ final class HotKeyManager {
         self.dictationHotkey = HotKeyDefinition(rawValue: dictationHotkey) ?? .defaultDictation
         self.editSelectionHotkey = HotKeyDefinition(rawValue: editSelectionHotkey) ?? .defaultEditSelection
         self.hotkeyMode = hotkeyMode
+        registerCarbonHotkeys()
     }
 
     private func handle(_ event: NSEvent) {
+        onEventDebug?(HotKeyDefinition.describe(event))
         guard let mode = mode(for: event) else { return }
+        onEventDebug?("Matched \(mode.rawValue): \(HotKeyDefinition.describe(event))")
         if hotkeyMode == .toggle {
             guard event.type == .keyDown, !event.isARepeat else { return }
             if let activeMode {
@@ -81,25 +94,46 @@ final class HotKeyManager {
 
     private func mode(for event: NSEvent) -> PipelineMode? {
         if dictationHotkey.matches(event) {
+            if carbonRegisteredModes.contains(.dictation) {
+                return nil
+            }
             return .dictation
         }
         if editSelectionHotkey.matches(event) {
+            if carbonRegisteredModes.contains(.editSelection) {
+                return nil
+            }
             return .editSelection
         }
         return nil
+    }
+
+    private func registerCarbonHotkeys() {
+        guard let onPress, let onRelease, let onEventDebug else {
+            return
+        }
+        carbonRegisteredModes = carbonMonitor.start(
+            dictationHotkey: dictationHotkey,
+            editSelectionHotkey: editSelectionHotkey,
+            hotkeyMode: hotkeyMode,
+            onPress: onPress,
+            onRelease: onRelease,
+            onEventDebug: onEventDebug
+        )
     }
 }
 
 struct HotKeyDefinition: Equatable {
     let keyCode: UInt16
     let modifiers: NSEvent.ModifierFlags
+    private static let matchableModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift, .function]
 
-    static let defaultDictation = HotKeyDefinition(keyCode: 0, modifiers: [.function])
-    static let defaultEditSelection = HotKeyDefinition(keyCode: 0, modifiers: [.function, .shift])
+    static let defaultDictation = HotKeyDefinition(keyCode: 0, modifiers: [.control, .option])
+    static let defaultEditSelection = HotKeyDefinition(keyCode: 0, modifiers: [.control, .option, .shift])
 
     init(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
         self.keyCode = keyCode
-        self.modifiers = modifiers.intersection(.deviceIndependentFlagsMask)
+        self.modifiers = modifiers.intersection(Self.matchableModifiers)
     }
 
     init?(rawValue: String) {
@@ -131,8 +165,55 @@ struct HotKeyDefinition: Equatable {
     }
 
     func matches(_ event: NSEvent) -> Bool {
-        event.keyCode == keyCode &&
-            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == modifiers
+        let eventModifiers = event.modifierFlags.intersection(Self.matchableModifiers)
+        return event.keyCode == keyCode &&
+            eventModifiers == modifiers
+    }
+
+    var canRegisterWithCarbon: Bool {
+        !modifiers.contains(.function)
+    }
+
+    var displayName: String {
+        let parts: [String] = [
+            modifiers.contains(.function) ? "Fn" : nil,
+            modifiers.contains(.control) ? "Control" : nil,
+            modifiers.contains(.option) ? "Option" : nil,
+            modifiers.contains(.shift) ? "Shift" : nil,
+            modifiers.contains(.command) ? "Command" : nil,
+            Self.keyName(for: keyCode)
+        ].compactMap { $0 }
+        return parts.joined(separator: "+")
+    }
+
+    var carbonModifiers: UInt32 {
+        var value: UInt32 = 0
+        if modifiers.contains(.command) {
+            value |= UInt32(cmdKey)
+        }
+        if modifiers.contains(.option) {
+            value |= UInt32(optionKey)
+        }
+        if modifiers.contains(.control) {
+            value |= UInt32(controlKey)
+        }
+        if modifiers.contains(.shift) {
+            value |= UInt32(shiftKey)
+        }
+        return value
+    }
+
+    static func describe(_ event: NSEvent) -> String {
+        let flags = event.modifierFlags.intersection(matchableModifiers)
+        let parts: [String] = [
+            flags.contains(.function) ? "Fn" : nil,
+            flags.contains(.control) ? "Control" : nil,
+            flags.contains(.option) ? "Option" : nil,
+            flags.contains(.shift) ? "Shift" : nil,
+            flags.contains(.command) ? "Command" : nil,
+            keyName(for: event.keyCode)
+        ].compactMap { $0 }
+        return "\(event.type == .keyDown ? "keyDown" : "keyUp") keyCode=\(event.keyCode) flags=\(parts.joined(separator: "+"))"
     }
 
     private static func keyCode(for key: String) -> UInt16? {
@@ -153,10 +234,191 @@ struct HotKeyDefinition: Equatable {
         }
     }
 
+    private static func keyName(for keyCode: UInt16) -> String {
+        if let match = letterKeyCodes.first(where: { $0.value == keyCode }) {
+            return String(match.key).uppercased()
+        }
+        switch keyCode {
+        case 49:
+            return "Space"
+        case 36:
+            return "Return"
+        case 48:
+            return "Tab"
+        case 53:
+            return "Esc"
+        default:
+            return "Key\(keyCode)"
+        }
+    }
+
     private static let letterKeyCodes: [Character: UInt16] = [
         "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7,
         "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15,
         "y": 16, "t": 17, "o": 31, "u": 32, "i": 34, "p": 35, "l": 37,
         "j": 38, "k": 40, "n": 45, "m": 46
     ]
+}
+
+private final class CarbonHotKeyMonitor {
+    private static let signature: OSType = 0x4C535459
+
+    private var hotKeyRefs: [EventHotKeyRef] = []
+    private var eventHandler: EventHandlerRef?
+    private var modeByID: [UInt32: PipelineMode] = [:]
+    private var activeMode: PipelineMode?
+    private var hotkeyMode: HotkeyMode = .pressToTalk
+    private var onPress: ((PipelineMode) -> Void)?
+    private var onRelease: ((PipelineMode) -> Void)?
+    private var onEventDebug: ((String) -> Void)?
+
+    func start(
+        dictationHotkey: HotKeyDefinition,
+        editSelectionHotkey: HotKeyDefinition,
+        hotkeyMode: HotkeyMode,
+        onPress: @escaping (PipelineMode) -> Void,
+        onRelease: @escaping (PipelineMode) -> Void,
+        onEventDebug: @escaping (String) -> Void
+    ) -> Set<PipelineMode> {
+        stop()
+        self.hotkeyMode = hotkeyMode
+        self.onPress = onPress
+        self.onRelease = onRelease
+        self.onEventDebug = onEventDebug
+
+        guard installHandler() == noErr else {
+            return []
+        }
+
+        var registeredModes = Set<PipelineMode>()
+        if register(dictationHotkey, mode: .dictation, id: 1) {
+            registeredModes.insert(.dictation)
+        }
+        if register(editSelectionHotkey, mode: .editSelection, id: 2) {
+            registeredModes.insert(.editSelection)
+        }
+        return registeredModes
+    }
+
+    func stop() {
+        for ref in hotKeyRefs {
+            UnregisterEventHotKey(ref)
+        }
+        hotKeyRefs.removeAll()
+        if let eventHandler {
+            RemoveEventHandler(eventHandler)
+        }
+        eventHandler = nil
+        modeByID.removeAll()
+        activeMode = nil
+    }
+
+    private func installHandler() -> OSStatus {
+        guard eventHandler == nil else {
+            return noErr
+        }
+        var eventTypes = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
+        ]
+        return eventTypes.withUnsafeMutableBufferPointer { pointer in
+            InstallEventHandler(
+                GetApplicationEventTarget(),
+                { _, event, userData in
+                    guard let event, let userData else {
+                        return noErr
+                    }
+                    let monitor = Unmanaged<CarbonHotKeyMonitor>
+                        .fromOpaque(userData)
+                        .takeUnretainedValue()
+                    monitor.handle(event)
+                    return noErr
+                },
+                pointer.count,
+                pointer.baseAddress,
+                Unmanaged.passUnretained(self).toOpaque(),
+                &eventHandler
+            )
+        }
+    }
+
+    private func register(_ definition: HotKeyDefinition, mode: PipelineMode, id: UInt32) -> Bool {
+        guard definition.canRegisterWithCarbon else {
+            onEventDebug?("Fn hotkey uses NSEvent fallback: \(definition.displayName)")
+            return false
+        }
+
+        let hotKeyID = EventHotKeyID(signature: Self.signature, id: id)
+        var ref: EventHotKeyRef?
+        let status = RegisterEventHotKey(
+            UInt32(definition.keyCode),
+            definition.carbonModifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &ref
+        )
+        guard status == noErr, let ref else {
+            onEventDebug?("Carbon hotkey registration failed for \(definition.displayName), status=\(status)")
+            return false
+        }
+        hotKeyRefs.append(ref)
+        modeByID[id] = mode
+        onEventDebug?("Carbon hotkey registered: \(definition.displayName)")
+        return true
+    }
+
+    private func handle(_ event: EventRef) {
+        var hotKeyID = EventHotKeyID()
+        let status = GetEventParameter(
+            event,
+            EventParamName(kEventParamDirectObject),
+            EventParamType(typeEventHotKeyID),
+            nil,
+            MemoryLayout<EventHotKeyID>.size,
+            nil,
+            &hotKeyID
+        )
+        guard status == noErr,
+              hotKeyID.signature == Self.signature,
+              let mode = modeByID[hotKeyID.id] else {
+            return
+        }
+
+        let kind = GetEventKind(event)
+        if kind == UInt32(kEventHotKeyPressed) {
+            onEventDebug?("Carbon matched \(mode.rawValue) keyDown")
+            handlePress(mode)
+        } else if kind == UInt32(kEventHotKeyReleased) {
+            onEventDebug?("Carbon matched \(mode.rawValue) keyUp")
+            handleRelease(mode)
+        }
+    }
+
+    private func handlePress(_ mode: PipelineMode) {
+        if hotkeyMode == .toggle {
+            if let activeMode {
+                self.activeMode = nil
+                onRelease?(activeMode)
+            } else {
+                activeMode = mode
+                onPress?(mode)
+            }
+            return
+        }
+
+        if activeMode == nil {
+            activeMode = mode
+            onPress?(mode)
+        }
+    }
+
+    private func handleRelease(_ mode: PipelineMode) {
+        guard hotkeyMode == .pressToTalk else {
+            return
+        }
+        let releaseMode = activeMode ?? mode
+        activeMode = nil
+        onRelease?(releaseMode)
+    }
 }

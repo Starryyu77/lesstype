@@ -12,9 +12,28 @@ struct HotkeySettingsView: View {
                     Text(mode.title).tag(mode)
                 }
             }
-            Text("当前 MVP 内置监听 Option+Space 与 Option+Shift+Space。可编辑快捷键配置已持久化，真正的动态重绑定留到阶段 2。")
+            Text("推荐使用 Ctrl+Option+A。Fn 键在部分 macOS 键盘设置下不会作为普通 modifier 传给应用；如果 Fn+A 没反应，请改用更稳的备用热键。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("最近捕获按键")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(appState.lastHotkeyEvent)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+            }
+
+            HStack {
+                Button("使用 Fn+A") {
+                    appState.useFnHotkeys()
+                }
+                Button("使用更稳的 Ctrl+Option+A") {
+                    appState.useReliableFallbackHotkeys()
+                }
+            }
+
             Button("保存快捷键设置") {
                 appState.saveConfig()
             }
@@ -32,4 +51,3 @@ struct HotkeySettingsView: View {
         )
     }
 }
-

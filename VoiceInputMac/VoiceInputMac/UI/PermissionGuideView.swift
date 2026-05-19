@@ -23,7 +23,7 @@ struct PermissionGuideView: View {
         VStack(alignment: .leading, spacing: 16) {
             Label("麦克风权限：\(microphoneStatus)", systemImage: "mic")
             Label("辅助功能权限：\(AXIsProcessTrusted() ? "已允许" : "未允许")", systemImage: "accessibility")
-            Label("输入监听权限：全局快捷键可能需要在系统设置中允许", systemImage: "keyboard")
+            Label("输入监听权限：\(CGPreflightListenEventAccess() ? "已允许" : "未允许")", systemImage: "keyboard")
 
             Text("需要麦克风权限才能录音；需要辅助功能权限才能把文本插入当前 App；全局按住快捷键在部分系统设置下还需要输入监听权限。")
                 .foregroundStyle(.secondary)
@@ -38,6 +38,9 @@ struct PermissionGuideView: View {
                 Button("打开输入监听设置") {
                     openPrivacyPane("Privacy_ListenEvent")
                 }
+                Button("请求输入监听权限") {
+                    _ = CGRequestListenEventAccess()
+                }
             }
         }
         .padding()
@@ -50,4 +53,3 @@ struct PermissionGuideView: View {
         }
     }
 }
-

@@ -5,6 +5,14 @@ import XCTest
 final class HotKeyTests: XCTestCase {
     func testParsesDefaultHotkeys() {
         XCTAssertEqual(
+            HotKeyDefinition(rawValue: "Control+Option+A"),
+            HotKeyDefinition(keyCode: 0, modifiers: [.control, .option])
+        )
+        XCTAssertEqual(
+            HotKeyDefinition(rawValue: "Control+Option+Shift+A"),
+            HotKeyDefinition(keyCode: 0, modifiers: [.control, .option, .shift])
+        )
+        XCTAssertEqual(
             HotKeyDefinition(rawValue: "Fn+A"),
             HotKeyDefinition(keyCode: 0, modifiers: [.function])
         )
@@ -20,5 +28,16 @@ final class HotKeyTests: XCTestCase {
 
     func testRejectsUnknownKey() {
         XCTAssertNil(HotKeyDefinition(rawValue: "Option+NotAKey"))
+    }
+
+    func testParsesReliableFallbackHotkeys() {
+        XCTAssertEqual(
+            HotKeyDefinition(rawValue: "Control+Option+A"),
+            HotKeyDefinition(keyCode: 0, modifiers: [.control, .option])
+        )
+        XCTAssertEqual(
+            HotKeyDefinition(rawValue: "Control+Option+Shift+A"),
+            HotKeyDefinition(keyCode: 0, modifiers: [.control, .option, .shift])
+        )
     }
 }

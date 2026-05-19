@@ -2,7 +2,7 @@
 
 本项目是一个本地优先的 macOS 菜单栏 AI 语音输入助手。它不是传统 IME，也不依赖 Electron / Tauri / WebView。第一版目标是跑通：
 
-`Option+Space 按住录音 -> 本地 whisper.cpp CLI ASR -> 豆包 / 火山方舟文本润色 -> 剪贴板 + Cmd+V 插入 -> SQLite 本地历史`
+`Control+Option+A 按住录音 -> 本地 whisper.cpp CLI ASR -> 豆包 / 火山方舟文本润色 -> 剪贴板 + Cmd+V 插入 -> SQLite 本地历史`
 
 项目从产品需求重新实现，不逆向、复制或引用任何第三方私有代码、素材、UI 资产、商业文案或专有实现。
 
@@ -10,7 +10,7 @@
 
 - SwiftUI + AppKit 菜单栏 App。
 - 设置页：General、ASR、LLM、Hotkeys、Dictionary、History、Styles、Permissions。
-- `Option+Space` 普通听写，`Option+Shift+Space` 选中文本编辑指令。
+- `Control+Option+A` 普通听写，`Control+Option+Shift+A` 选中文本编辑指令。
 - AVAudioEngine 录音，输出 16kHz mono PCM WAV 临时文件。
 - whisper.cpp CLI ASR：默认本地模型，默认不上传音频。
 - OpenAI-compatible Ark 客户端：base URL、model、temperature、timeout 可配置。
@@ -117,10 +117,10 @@ Provider = 自定义 OpenAI-compatible
 
 ## 快捷键
 
-- `Fn+A`：按住说话，松开后识别并插入。
-- `Fn+Shift+A`：按住说编辑指令，松开后改写当前选中文本。
+- `Control+Option+A`：按住说话，松开后识别并插入。
+- `Control+Option+Shift+A`：按住说编辑指令，松开后改写当前选中文本。
 
-设置页会持久化快捷键文本，支持 `Fn` / `Option` / `Shift` / `Command` / `Control` 与常见字母键组合。
+设置页会持久化快捷键文本，支持 `Fn` / `Option` / `Shift` / `Command` / `Control` 与常见字母键组合。普通全局热键优先走 Carbon `RegisterEventHotKey`；`Fn` 在部分 macOS 键盘设置下不会稳定分发给 App，因此只作为可选尝试。
 
 ## 权限说明
 

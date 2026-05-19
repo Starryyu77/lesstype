@@ -27,8 +27,8 @@ struct AppConfig: Codable, Equatable {
     var customLLMRequiresAPIKey: Bool = false
     var customLLMExtraHeadersJSON: String = ""
 
-    var dictationHotkey: String = "Fn+A"
-    var editSelectionHotkey: String = "Fn+Shift+A"
+    var dictationHotkey: String = "Control+Option+A"
+    var editSelectionHotkey: String = "Control+Option+Shift+A"
     var hotkeyMode: HotkeyMode = .pressToTalk
 
     var saveHistory: Bool = true
@@ -87,8 +87,8 @@ extension AppConfig {
               editSelectionHotkey == "Option+Shift+Space" else {
             return
         }
-        dictationHotkey = "Fn+A"
-        editSelectionHotkey = "Fn+Shift+A"
+        dictationHotkey = "Control+Option+A"
+        editSelectionHotkey = "Control+Option+Shift+A"
     }
 }
 
@@ -124,7 +124,7 @@ enum HotkeyMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum PipelineMode: String, Codable {
+enum PipelineMode: String, Codable, Hashable {
     case dictation
     case editSelection
 }

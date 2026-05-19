@@ -13,14 +13,14 @@ final class AppConfigTests: XCTestCase {
         XCTAssertEqual(config.customLLMPath, "chat/completions")
     }
 
-    func testMigratesLegacyOptionSpaceDefaultsToFnA() throws {
+    func testMigratesLegacyOptionSpaceDefaultsToReliableFallback() throws {
         var config = try JSONDecoder().decode(
             AppConfig.self,
             from: Data(#"{"dictationHotkey":"Option+Space","editSelectionHotkey":"Option+Shift+Space"}"#.utf8)
         )
         config.migrateLegacyHotkeyDefaults()
 
-        XCTAssertEqual(config.dictationHotkey, "Fn+A")
-        XCTAssertEqual(config.editSelectionHotkey, "Fn+Shift+A")
+        XCTAssertEqual(config.dictationHotkey, "Control+Option+A")
+        XCTAssertEqual(config.editSelectionHotkey, "Control+Option+Shift+A")
     }
 }

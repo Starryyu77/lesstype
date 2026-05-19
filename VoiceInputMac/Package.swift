@@ -18,6 +18,7 @@ let package = Package(
                 .process("Resources")
             ],
             linkerSettings: [
+                .linkedFramework("Carbon"),
                 .linkedLibrary("sqlite3")
             ]
         ),

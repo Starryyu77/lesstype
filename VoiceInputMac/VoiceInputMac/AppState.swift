@@ -15,6 +15,7 @@ final class AppState: ObservableObject {
     @Published var apiKeyDraft: String = ""
     @Published var asrCheckMessage: String = ""
     @Published var llmCheckMessage: String = ""
+    @Published var lastHotkeyEvent: String = "尚未捕获按键事件"
 
     let database: AppDatabase
     let historyStore: HistoryStore
@@ -71,6 +72,9 @@ final class AppState: ObservableObject {
             },
             onRelease: { [weak self] mode in
                 Task { @MainActor in self?.finishRecording(mode: mode) }
+            },
+            onEventDebug: { [weak self] description in
+                Task { @MainActor in self?.lastHotkeyEvent = description }
             }
         )
     }
@@ -116,6 +120,18 @@ final class AppState: ObservableObject {
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    func useFnHotkeys() {
+        config.dictationHotkey = "Fn+A"
+        config.editSelectionHotkey = "Fn+Shift+A"
+        saveConfig()
+    }
+
+    func useReliableFallbackHotkeys() {
+        config.dictationHotkey = "Control+Option+A"
+        config.editSelectionHotkey = "Control+Option+Shift+A"
+        saveConfig()
     }
 
     func selectLLMProvider(_ provider: String) {
