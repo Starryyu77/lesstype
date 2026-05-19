@@ -47,12 +47,17 @@ final class WhisperCliService: ASRProvider {
         try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            let outputBaseURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("voiceinput-whisper-\(UUID().uuidString)")
             var arguments = [
                 options.cliCommand,
                 "-m", options.modelPath,
                 "-f", audioURL.path,
                 "-l", options.language,
-                "-nt"
+                "-nt",
+                "-otxt",
+                "-of", outputBaseURL.path,
+                "-np"
             ]
             if options.useMetal {
                 arguments.append(contentsOf: ["--flash-attn"])
@@ -69,8 +74,12 @@ final class WhisperCliService: ASRProvider {
                 let errData = stderr.fileHandleForReading.readDataToEndOfFile()
                 let output = String(data: outData, encoding: .utf8) ?? ""
                 let errorOutput = String(data: errData, encoding: .utf8) ?? ""
+                let transcriptURL = outputBaseURL.appendingPathExtension("txt")
+                let transcript = (try? String(contentsOf: transcriptURL, encoding: .utf8)) ?? ""
+                try? FileManager.default.removeItem(at: transcriptURL)
+
                 if process.terminationStatus == 0 {
-                    continuation.resume(returning: output.isEmpty ? errorOutput : output)
+                    continuation.resume(returning: transcript.isEmpty ? output : transcript)
                 } else {
                     let sanitized = errorOutput.replacingOccurrences(of: "Authorization: Bearer [^\\n]+", with: "Authorization: Bearer <redacted>", options: .regularExpression)
                     continuation.resume(throwing: AppError.asrFailed(sanitized.isEmpty ? "whisper-cli exited with \(process.terminationStatus)" : sanitized))
@@ -91,15 +100,38 @@ final class WhisperCliService: ASRProvider {
             .map(String.init)
             .filter { line in
                 let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                return !trimmed.hasPrefix("whisper_") &&
-                    !trimmed.hasPrefix("system_info") &&
-                    !trimmed.hasPrefix("main:") &&
-                    !trimmed.contains("load time") &&
-                    !trimmed.contains("sample time") &&
-                    !trimmed.contains("encode time")
+                return !trimmed.isEmpty && !isDiagnosticLine(trimmed)
             }
         let joined = lines.joined(separator: " ")
-        return joined.replacingOccurrences(of: #"\[[^\]]+\]"#, with: "", options: .regularExpression)
+        return joined
+            .replacingOccurrences(of: #"\[[^\]]+\]"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func isDiagnosticLine(_ line: String) -> Bool {
+        let prefixes = [
+            "load_backend:",
+            "ggml_",
+            "whisper_",
+            "system_info",
+            "main:",
+            "objc[",
+            "dyld["
+        ]
+        if prefixes.contains(where: { line.hasPrefix($0) }) {
+            return true
+        }
+        let diagnosticFragments = [
+            " load time",
+            " sample time",
+            " encode time",
+            " decode time",
+            " total time",
+            "recommendedMaxWorkingSetSize",
+            "MTL backend",
+            "BLAS backend",
+            "CPU backend"
+        ]
+        return diagnosticFragments.contains(where: line.contains)
     }
 }
-

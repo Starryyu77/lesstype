@@ -30,3 +30,11 @@
 - 设置页增强：ASR 配置检查、LLM 测试连接、词典选择/修改/保存、Style Profile 选择/修改/新增/删除。
 - 快捷键增强：`HotKeyManager` 从配置解析 `Option+Space` / `Option+Shift+Space` 等组合键，不再只硬编码默认值。
 - 验证：`swift test` 已通过，11 个 XCTest 全部通过。
+
+## 2026-05-19 本机调试修复
+
+- 修复录音后闪退：`AudioRecorder` 不再在 CoreAudio 实时 tap 线程中用 `AVAudioFile.write` 转换/写 WAV，改为收集 mono float samples，停止录音后离线写 16kHz mono PCM16 WAV。
+- 修复 whisper.cpp backend 日志被插入：`WhisperCliService` 成功路径优先使用 `-otxt -of` 生成的 transcript 文件，不再在 stdout 为空时把 stderr 当作 ASR 文本；`clean` 也会过滤 `load_backend:`、`ggml_`、`whisper_` 等诊断行。
+- 新增回归测试：`AudioBufferWriterTests` 与 `WhisperCliServiceTests`。
+- 本机当前运行修复版：`dist/VoiceInputMac.app`，最近验证 `swift test` 19 个 XCTest 全部通过。
+- 权限反复请求的原因：本机 `security find-identity -v -p codesigning` 返回 0 个有效身份，当前只能 ad-hoc 签名；每次重新打包可能改变 TCC 识别，长期使用需要稳定 Apple Development / Developer ID 签名或固定使用同一个已授权 `.app`。
