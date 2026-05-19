@@ -135,3 +135,11 @@
 - 验证：`swift test` 27 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：53712。
 - 追加定位：历史表最近记录 `final_text` 只有一遍，但输入框出现约 6 遍；这与 `AccessibilityInjector` 的 6 次重试吻合。原因是 AX 写入已经成功，但写后读取验证拿不到新值，导致误判失败并重复写入。已移除写后验证，`AXUIElementSetAttributeValue(kAXValueAttribute)` 成功后立即返回。
 - 验证：`swift test` 27 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：58841。
+
+## 2026-05-19 热键录制设置
+
+- 用户要求：设置页中的热键管理应允许用户自己设置热键，而不是只用固定预设或手动输入字符串。
+- `HotkeySettingsView` 新增热键录制控件：点击“录制”后按新的组合键即可保存；按 Esc 取消；录制时暂停当前全局热键监听，避免设置过程中误触发录音。
+- `HotKeyDefinition` 新增从 `NSEvent` 构造热键、规范化显示名、F1-F20、数字键、方向键、Delete 与 `KeyNN` 解析。
+- `AppState` 新增 `assignHotkey`、冲突检查和热键设置状态提示；保存后立即重新注册全局热键。
+- 验证：`swift test` 29 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：67570。

@@ -16,6 +16,7 @@ final class AppState: ObservableObject {
     @Published var asrCheckMessage: String = ""
     @Published var llmCheckMessage: String = ""
     @Published var lastHotkeyEvent: String = "尚未捕获按键事件"
+    @Published var hotkeySettingsMessage: String = ""
 
     let database: AppDatabase
     let historyStore: HistoryStore
@@ -146,6 +147,40 @@ final class AppState: ObservableObject {
     func useToggleRecordingMode() {
         config.hotkeyMode = .toggle
         saveConfig()
+    }
+
+    func setHotkeyCaptureActive(_ active: Bool) {
+        hotKeyManager.setCaptureSuspended(active)
+    }
+
+    func assignHotkey(_ definition: HotKeyDefinition, to mode: PipelineMode) {
+        let value = definition.displayName
+        let otherDefinition = mode == .dictation
+            ? HotKeyDefinition(rawValue: config.editSelectionHotkey)
+            : HotKeyDefinition(rawValue: config.dictationHotkey)
+        let conflict = otherDefinition == definition
+        guard !conflict else {
+            hotkeySettingsMessage = "这个快捷键已经被另一个语音功能使用。"
+            return
+        }
+
+        switch mode {
+        case .dictation:
+            config.dictationHotkey = value
+        case .editSelection:
+            config.editSelectionHotkey = value
+        }
+        saveConfig()
+        hotkeySettingsMessage = "\(hotkeyTitle(for: mode)) 已设置为 \(value)"
+    }
+
+    func hotkeyTitle(for mode: PipelineMode) -> String {
+        switch mode {
+        case .dictation:
+            return "普通听写"
+        case .editSelection:
+            return "编辑选中文本"
+        }
     }
 
     func selectLLMProvider(_ provider: String) {

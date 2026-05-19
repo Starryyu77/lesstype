@@ -40,4 +40,40 @@ final class HotKeyTests: XCTestCase {
             HotKeyDefinition(keyCode: 0, modifiers: [.control, .option, .shift])
         )
     }
+
+    func testBuildsHotkeyFromCapturedEvent() {
+        let event = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.control, .option],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "a",
+            charactersIgnoringModifiers: "a",
+            isARepeat: false,
+            keyCode: 0
+        )
+
+        XCTAssertEqual(
+            event.flatMap(HotKeyDefinition.from(event:)),
+            HotKeyDefinition(keyCode: 0, modifiers: [.control, .option])
+        )
+        XCTAssertEqual(event.flatMap(HotKeyDefinition.from(event:))?.displayName, "Control+Option+A")
+    }
+
+    func testParsesFunctionDigitAndRawKeyNames() {
+        XCTAssertEqual(
+            HotKeyDefinition(rawValue: "Control+F12"),
+            HotKeyDefinition(keyCode: 111, modifiers: [.control])
+        )
+        XCTAssertEqual(
+            HotKeyDefinition(rawValue: "Command+1"),
+            HotKeyDefinition(keyCode: 18, modifiers: [.command])
+        )
+        XCTAssertEqual(
+            HotKeyDefinition(rawValue: "Option+Key123"),
+            HotKeyDefinition(keyCode: 123, modifiers: [.option])
+        )
+    }
 }

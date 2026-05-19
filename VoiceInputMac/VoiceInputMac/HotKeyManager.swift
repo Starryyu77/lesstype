@@ -13,6 +13,7 @@ final class HotKeyManager {
     private var hotkeyMode: HotkeyMode = .pressToTalk
     private let carbonMonitor = CarbonHotKeyMonitor()
     private var carbonRegisteredModes = Set<PipelineMode>()
+    private var isCaptureSuspended = false
 
     func start(
         dictationHotkey: String,
@@ -64,7 +65,13 @@ final class HotKeyManager {
         registerCarbonHotkeys()
     }
 
+    func setCaptureSuspended(_ suspended: Bool) {
+        isCaptureSuspended = suspended
+        carbonMonitor.setCaptureSuspended(suspended)
+    }
+
     private func handle(_ event: NSEvent) {
+        guard !isCaptureSuspended else { return }
         onEventDebug?(HotKeyDefinition.describe(event))
         guard let mode = mode(for: event) else { return }
         onEventDebug?("Matched \(mode.rawValue): \(HotKeyDefinition.describe(event))")
@@ -164,6 +171,13 @@ struct HotKeyDefinition: Equatable {
         self.init(keyCode: keyCode, modifiers: modifiers)
     }
 
+    static func from(event: NSEvent) -> HotKeyDefinition? {
+        guard event.type == .keyDown, !event.isARepeat else { return nil }
+        let modifiers = event.modifierFlags.intersection(Self.matchableModifiers)
+        guard !modifiers.isEmpty else { return nil }
+        return HotKeyDefinition(keyCode: event.keyCode, modifiers: modifiers)
+    }
+
     func matches(_ event: NSEvent) -> Bool {
         let eventModifiers = event.modifierFlags.intersection(Self.matchableModifiers)
         return event.keyCode == keyCode &&
@@ -217,6 +231,12 @@ struct HotKeyDefinition: Equatable {
     }
 
     private static func keyCode(for key: String) -> UInt16? {
+        if key.hasPrefix("key"), let rawCode = UInt16(key.dropFirst(3)) {
+            return rawCode
+        }
+        if key.hasPrefix("f"), let rawNumber = Int(key.dropFirst()), let code = functionKeyCodes[rawNumber] {
+            return code
+        }
         switch key {
         case "space":
             return 49
@@ -226,7 +246,20 @@ struct HotKeyDefinition: Equatable {
             return 48
         case "escape", "esc":
             return 53
+        case "left", "leftarrow":
+            return 123
+        case "right", "rightarrow":
+            return 124
+        case "down", "downarrow":
+            return 125
+        case "up", "uparrow":
+            return 126
+        case "delete", "backspace":
+            return 51
         default:
+            if let digit = digitKeyCodes[key] {
+                return digit
+            }
             if key.count == 1, let scalar = key.unicodeScalars.first {
                 return letterKeyCodes[Character(String(scalar))]
             }
@@ -238,6 +271,12 @@ struct HotKeyDefinition: Equatable {
         if let match = letterKeyCodes.first(where: { $0.value == keyCode }) {
             return String(match.key).uppercased()
         }
+        if let match = digitKeyCodes.first(where: { $0.value == keyCode }) {
+            return match.key
+        }
+        if let match = functionKeyCodes.first(where: { $0.value == keyCode }) {
+            return "F\(match.key)"
+        }
         switch keyCode {
         case 49:
             return "Space"
@@ -247,6 +286,16 @@ struct HotKeyDefinition: Equatable {
             return "Tab"
         case 53:
             return "Esc"
+        case 123:
+            return "Left"
+        case 124:
+            return "Right"
+        case 125:
+            return "Down"
+        case 126:
+            return "Up"
+        case 51:
+            return "Delete"
         default:
             return "Key\(keyCode)"
         }
@@ -257,6 +306,18 @@ struct HotKeyDefinition: Equatable {
         "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15,
         "y": 16, "t": 17, "o": 31, "u": 32, "i": 34, "p": 35, "l": 37,
         "j": 38, "k": 40, "n": 45, "m": 46
+    ]
+
+    private static let digitKeyCodes: [String: UInt16] = [
+        "0": 29, "1": 18, "2": 19, "3": 20, "4": 21,
+        "5": 23, "6": 22, "7": 26, "8": 28, "9": 25
+    ]
+
+    private static let functionKeyCodes: [Int: UInt16] = [
+        1: 122, 2: 120, 3: 99, 4: 118, 5: 96,
+        6: 97, 7: 98, 8: 100, 9: 101, 10: 109,
+        11: 103, 12: 111, 13: 105, 14: 107, 15: 113,
+        16: 106, 17: 64, 18: 79, 19: 80, 20: 90
     ]
 }
 
@@ -271,6 +332,7 @@ private final class CarbonHotKeyMonitor {
     private var onPress: ((PipelineMode) -> Void)?
     private var onRelease: ((PipelineMode) -> Void)?
     private var onEventDebug: ((String) -> Void)?
+    private var isCaptureSuspended = false
 
     func start(
         dictationHotkey: HotKeyDefinition,
@@ -311,6 +373,10 @@ private final class CarbonHotKeyMonitor {
         eventHandler = nil
         modeByID.removeAll()
         activeMode = nil
+    }
+
+    func setCaptureSuspended(_ suspended: Bool) {
+        isCaptureSuspended = suspended
     }
 
     private func installHandler() -> OSStatus {
@@ -369,6 +435,7 @@ private final class CarbonHotKeyMonitor {
     }
 
     private func handle(_ event: EventRef) {
+        guard !isCaptureSuspended else { return }
         var hotKeyID = EventHotKeyID()
         let status = GetEventParameter(
             event,
