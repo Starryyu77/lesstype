@@ -38,6 +38,7 @@ final class AppState: ObservableObject {
 
     private var activeRecordingMode: PipelineMode?
     private var selectedTextAtRecordingStart: String = ""
+    private var appContextAtRecordingStart: ActiveAppContext?
     private var recordingStartedAt: Date?
 
     private init() {
@@ -134,6 +135,11 @@ final class AppState: ObservableObject {
         saveConfig()
     }
 
+    func useToggleRecordingMode() {
+        config.hotkeyMode = .toggle
+        saveConfig()
+    }
+
     func selectLLMProvider(_ provider: String) {
         config.llmProvider = provider
         saveConfig()
@@ -186,6 +192,7 @@ final class AppState: ObservableObject {
         guard phase == .idle || phase == .done || phase == .error else { return }
         activeRecordingMode = mode
         selectedTextAtRecordingStart = ""
+        appContextAtRecordingStart = activeAppDetector.currentContext()
         recordingStartedAt = Date()
 
         if mode == .editSelection {
@@ -246,6 +253,7 @@ final class AppState: ObservableObject {
     private func runPipeline(audioURL: URL, mode: PipelineMode) async throws {
         defer {
             activeRecordingMode = nil
+            appContextAtRecordingStart = nil
             recordingStartedAt = nil
             if !config.saveAudio {
                 try? FileManager.default.removeItem(at: audioURL)
@@ -271,7 +279,7 @@ final class AppState: ObservableObject {
             throw AppError.emptyTranscript
         }
 
-        let appContext = activeAppDetector.currentContext()
+        let appContext = appContextAtRecordingStart ?? activeAppDetector.currentContext()
         let selectedText = mode == .editSelection ? selectedTextAtRecordingStart : ""
         let routedCommand = commandRouter.route(rawTranscript: normalizedTranscript, hasSelectedText: !selectedText.isEmpty)
         if routedCommand.type == .systemCommand {
@@ -305,7 +313,7 @@ final class AppState: ObservableObject {
         phase = .injecting
         message = "正在插入文本"
         DictationOverlayPresenter.shared.show(message: message, phase: phase)
-        try await perform(action: action)
+        try await perform(action: action, targetContext: appContext)
 
         let latency = Int(Date().timeIntervalSince(pipelineStart) * 1000)
         if config.saveHistory {
@@ -387,7 +395,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func perform(action: LLMAction) async throws {
+    private func perform(action: LLMAction, targetContext: ActiveAppContext) async throws {
         if action.action == "noop" {
             return
         }
@@ -397,6 +405,7 @@ final class AppState: ObservableObject {
         }
 
         do {
+            await activateTargetApp(targetContext)
             if action.action == "replace_selection" {
                 try await accessibilityInjector.replaceSelectedText(action.text)
             } else {
@@ -404,15 +413,27 @@ final class AppState: ObservableObject {
             }
         } catch {
             do {
+                await activateTargetApp(targetContext)
                 if action.action == "replace_selection" {
                     try await pasteboardInjector.replaceSelectedText(action.text)
                 } else {
                     try await pasteboardInjector.insertText(action.text)
                 }
             } catch {
-                ResultPanelPresenter.shared.show(text: action.text, reason: AppError.injectionFailed("").errorDescription ?? "")
+                let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                ResultPanelPresenter.shared.show(text: action.text, reason: reason)
             }
         }
+    }
+
+    private func activateTargetApp(_ context: ActiveAppContext) async {
+        guard context.processIdentifier > 0,
+              context.processIdentifier != NSRunningApplication.current.processIdentifier,
+              let app = NSRunningApplication(processIdentifier: context.processIdentifier) else {
+            return
+        }
+        app.activate(options: [.activateIgnoringOtherApps])
+        try? await Task.sleep(nanoseconds: 180_000_000)
     }
 
     func clearHistory() {

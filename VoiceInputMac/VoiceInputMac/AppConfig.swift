@@ -117,9 +117,9 @@ enum HotkeyMode: String, Codable, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .pressToTalk:
-            return "Press-to-talk"
+            return "按住说话"
         case .toggle:
-            return "Toggle"
+            return "按一下开始，再按一下结束并输入"
         }
     }
 }

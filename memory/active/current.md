@@ -50,3 +50,14 @@
 - 新增回归测试：`JSONParsingTests.testParsesPartialActionJSONWithDefaults`。
 - 验证：`swift test` 21 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 成功；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 成功。
 - 本机已重启为新构建版本，进程 PID：42484。
+
+## 2026-05-19 目标 App 注入与 Toggle 模式
+
+- 修复自动插入仍失败的主要风险：pipeline 现在会在录音开始时记录目标 App 的 `processIdentifier`，注入前重新激活该目标 App，再尝试 AX 注入和剪贴板 Cmd+V fallback。
+- App 启动时不再自动弹出设置窗口，避免设置窗口抢走焦点；设置仍可从菜单栏图标打开。
+- `PasteboardInjector` 在发送 Cmd+V 前会检查辅助功能权限；如果权限不足，会明确展示“需要辅助功能权限”，不再静默假装粘贴成功。
+- Hotkeys 设置页已把录音模式改成中文文案，并新增“使用按一下开始/结束”按钮。
+- 本机配置已切到 `hotkeyMode=toggle`：`Control+Option+A` 按一次开始录音，再按一次停止、识别并输入；`Control+Option+Shift+A` 对选中文本编辑同理。
+- 当前本机仍没有有效代码签名身份：`security find-identity -v -p codesigning` 返回 `0 valid identities found`。因此当前只能 ad-hoc 签名，重打包后 TCC 权限可能反复要求重新授权。
+- 验证：`swift test` 21 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 成功；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 成功。
+- 本机已重启为新构建版本，进程 PID：49856。

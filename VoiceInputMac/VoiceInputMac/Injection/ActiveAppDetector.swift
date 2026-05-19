@@ -6,6 +6,7 @@ struct ActiveAppContext: Equatable {
     let activeApp: String
     let bundleIdentifier: String
     let windowTitle: String
+    let processIdentifier: pid_t
 }
 
 final class ActiveAppDetector {
@@ -16,7 +17,8 @@ final class ActiveAppDetector {
         return ActiveAppContext(
             activeApp: appName,
             bundleIdentifier: bundleID,
-            windowTitle: windowTitle(for: app?.processIdentifier)
+            windowTitle: windowTitle(for: app?.processIdentifier),
+            processIdentifier: app?.processIdentifier ?? 0
         )
     }
 
@@ -36,4 +38,3 @@ final class ActiveAppDetector {
         return ""
     }
 }
-

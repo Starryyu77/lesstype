@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Foundation
 
 final class PasteboardInjector: TextInjector {
@@ -17,6 +18,9 @@ final class PasteboardInjector: TextInjector {
     }
 
     private func paste(_ text: String) async throws {
+        guard AXIsProcessTrusted() else {
+            throw AppError.accessibilityPermissionDenied
+        }
         let pasteboard = NSPasteboard.general
         let snapshot = ClipboardSnapshot.capture(from: pasteboard)
         pasteboard.clearContents()

@@ -12,6 +12,9 @@ struct HotkeySettingsView: View {
                     Text(mode.title).tag(mode)
                 }
             }
+            Text(appState.config.hotkeyMode == .toggle ? "当前：按一次开始录音，再按一次停止、识别并输入。" : "当前：按住快捷键录音，松开后识别并输入。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Text("推荐使用 Ctrl+Option+A。Fn 键在部分 macOS 键盘设置下不会作为普通 modifier 传给应用；如果 Fn+A 没反应，请改用更稳的备用热键。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -31,6 +34,9 @@ struct HotkeySettingsView: View {
                 }
                 Button("使用更稳的 Ctrl+Option+A") {
                     appState.useReliableFallbackHotkeys()
+                }
+                Button("使用按一下开始/结束") {
+                    appState.useToggleRecordingMode()
                 }
             }
 
