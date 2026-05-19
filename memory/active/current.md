@@ -151,3 +151,8 @@
 - 进一步修复：新增 `CGEventHotKeyMonitor` 作为运行时优先热键路径，使用 `.cgSessionEventTap + .listenOnly` 监听 keyDown/keyUp，支持 CoreGraphics `maskSecondaryFn`；CGEventTap 无输入监听权限时回退 Carbon。录制时也新增 CGEventTap 捕获，local/global/AppKit monitor 之外再走低层键盘事件。
 - Hotkeys 页文案更新：Fn / Control / Option 组合键依赖输入监听权限；如果录制或触发失败，需要在 Permissions 页请求输入监听权限。
 - 验证：`swift test` 31 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：87858。
+- 用户继续反馈：预设 `Fn+A` 可用，但自己设置的 modifier 类 hotkey 仍不行；同时 Whisper/LLM 结果偶发带出“要求后续变更/更正”尾巴。
+- 修复：`HotKeyDefinition` 支持纯修饰键热键（如 `Fn`、`Control`、`Option`、`Control+Option`），运行时 `HotKeyManager` 与 `CGEventHotKeyMonitor` 增加 `.flagsChanged` 监听；Toggle 模式下纯修饰键按一次开始、再次按同一修饰键停止，Press-to-talk 下松开修饰键停止。
+- 修复：设置页录制热键时也监听 `.flagsChanged`；按下纯修饰键会暂存，松开保存纯修饰键，继续按字母/数字键则保存组合键。多修饰键纯热键会保留最高阶组合，避免按 `Control+Option` 后松开时只保存成 `Control`。
+- 修复：`DictationTextPolisher` 增加 ASR 尾部噪声过滤，删除 `要求后续变更/要求后续更正/要求后续变更正` 等误识别残留。
+- 验证：`swift test` 34 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 使用 Apple Development 成功签名；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；本机运行 PID：93880。

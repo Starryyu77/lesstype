@@ -24,6 +24,14 @@ final class HotKeyTests: XCTestCase {
             HotKeyDefinition(rawValue: "Option+Space"),
             HotKeyDefinition(keyCode: 49, modifiers: [.option])
         )
+        XCTAssertEqual(
+            HotKeyDefinition(rawValue: "Fn"),
+            HotKeyDefinition(keyCode: HotKeyDefinition.modifierOnlyKeyCode, modifiers: [.function])
+        )
+        XCTAssertEqual(
+            HotKeyDefinition(rawValue: "Control+Option"),
+            HotKeyDefinition(keyCode: HotKeyDefinition.modifierOnlyKeyCode, modifiers: [.control, .option])
+        )
     }
 
     func testRejectsUnknownKey() {
@@ -89,6 +97,39 @@ final class HotKeyTests: XCTestCase {
             HotKeyDefinition(keyCode: 0, modifiers: [.function, .control])
         )
         XCTAssertEqual(event.flatMap { HotKeyDefinition.from(cgEvent: $0, type: .keyDown) }?.displayName, "Fn+Control+A")
+    }
+
+    func testBuildsModifierOnlyHotkeyFromFlagsChangedEvent() {
+        let event = NSEvent.keyEvent(
+            with: .flagsChanged,
+            location: .zero,
+            modifierFlags: [.function, .numericPad],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "",
+            charactersIgnoringModifiers: "",
+            isARepeat: false,
+            keyCode: 63
+        )
+
+        XCTAssertEqual(
+            event.flatMap(HotKeyDefinition.from(event:)),
+            HotKeyDefinition(keyCode: HotKeyDefinition.modifierOnlyKeyCode, modifiers: [.function])
+        )
+        XCTAssertEqual(HotKeyDefinition(rawValue: "Fn")?.matches(event!), true)
+        XCTAssertEqual(event.flatMap(HotKeyDefinition.from(event:))?.displayName, "Fn")
+    }
+
+    func testBuildsModifierOnlyHotkeyFromCGFlagsChangedEvent() {
+        let event = CGEvent(keyboardEventSource: nil, virtualKey: 63, keyDown: true)
+        event?.flags = [.maskSecondaryFn]
+
+        XCTAssertEqual(
+            event.flatMap { HotKeyDefinition.from(cgEvent: $0, type: .flagsChanged) },
+            HotKeyDefinition(keyCode: HotKeyDefinition.modifierOnlyKeyCode, modifiers: [.function])
+        )
+        XCTAssertEqual(event.flatMap { HotKeyDefinition(rawValue: "Fn")?.matches($0, type: .flagsChanged) }, true)
     }
 
     func testParsesFunctionDigitAndRawKeyNames() {

@@ -5,6 +5,7 @@ struct DictationTextPolisher {
         var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !result.isEmpty else { return result }
 
+        result = removeASRTailArtifacts(in: result)
         result = result.replacingOccurrences(of: "其实我觉得整理其实也不太正常", with: "整理其实也不太正常")
         result = result.replacingOccurrences(of: "其实我觉得整理也不太正常", with: "整理也不太正常")
         result = removeSupersededPositiveJudgement(
@@ -15,6 +16,25 @@ struct DictationTextPolisher {
         result = collapseDuplicateAdverbs(in: result)
         result = normalizeSpacing(in: result)
         return result
+    }
+
+    private func removeASRTailArtifacts(in text: String) -> String {
+        var result = text
+        let patterns = [
+            #"(?:(?:有)?一个)?要求后续(?:变更正|变更|更正)(?:的?这个词)?"#,
+            #"要求后续(?:变更正|变更|更正)"#
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let range = NSRange(result.startIndex..., in: result)
+            result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: "")
+        }
+        return result
+            .replacingOccurrences(of: "会会", with: "会")
+            .replacingOccurrences(of: "有一个会出现", with: "会出现")
+            .replacingOccurrences(of: "一个会出现", with: "会出现")
+            .replacingOccurrences(of: "有一个出现", with: "出现")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func removeSupersededPositiveJudgement(topic: String, negativeMarkers: [String], from text: String) -> String {

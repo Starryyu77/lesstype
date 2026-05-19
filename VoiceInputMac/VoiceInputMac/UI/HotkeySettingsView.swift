@@ -160,6 +160,7 @@ private final class HotkeyCaptureMonitor: ObservableObject {
     private var captureMode: PipelineMode?
     private weak var captureAppState: AppState?
     private var captureOnFinish: (() -> Void)?
+    private var pendingModifierOnlyHotkey: HotKeyDefinition?
 
     func start(mode: PipelineMode, appState: AppState, onFinish: @escaping () -> Void) {
         stop(appState: nil)
@@ -167,7 +168,8 @@ private final class HotkeyCaptureMonitor: ObservableObject {
         captureMode = mode
         captureAppState = appState
         captureOnFinish = onFinish
-        if let local = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self, weak appState] event in
+        pendingModifierOnlyHotkey = nil
+        if let local = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged], handler: { [weak self, weak appState] event in
             Task { @MainActor in
                 guard let self, let appState else { return }
                 self.handle(event, mode: mode, appState: appState, onFinish: onFinish)
@@ -177,7 +179,7 @@ private final class HotkeyCaptureMonitor: ObservableObject {
             monitors.append(local)
         }
 
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self, weak appState] event in
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .flagsChanged], handler: { [weak self, weak appState] event in
             Task { @MainActor in
                 guard let self, let appState else { return }
                 self.handle(event, mode: mode, appState: appState, onFinish: onFinish)
@@ -198,6 +200,7 @@ private final class HotkeyCaptureMonitor: ObservableObject {
         captureMode = nil
         captureAppState = nil
         captureOnFinish = nil
+        pendingModifierOnlyHotkey = nil
         appState?.setHotkeyCaptureActive(false)
     }
 
@@ -207,7 +210,9 @@ private final class HotkeyCaptureMonitor: ObservableObject {
             return
         }
 
-        let mask = CGEventMask(1) << CGEventType.keyDown.rawValue
+        let mask =
+            (CGEventMask(1) << CGEventType.keyDown.rawValue) |
+            (CGEventMask(1) << CGEventType.flagsChanged.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, userInfo in
             guard let userInfo else {
                 return Unmanaged.passUnretained(event)
@@ -260,6 +265,15 @@ private final class HotkeyCaptureMonitor: ObservableObject {
         onFinish: () -> Void
     ) {
         guard isActive else { return }
+        if event.type == .flagsChanged {
+            handleModifierChange(
+                definition: HotKeyDefinition.from(event: event),
+                mode: mode,
+                appState: appState,
+                onFinish: onFinish
+            )
+            return
+        }
         if event.keyCode == 53 {
             stop(appState: appState)
             appState.hotkeySettingsMessage = "已取消录制。"
@@ -272,6 +286,7 @@ private final class HotkeyCaptureMonitor: ObservableObject {
             return
         }
 
+        pendingModifierOnlyHotkey = nil
         appState.assignHotkey(definition, to: mode)
         stop(appState: appState)
         onFinish()
@@ -282,10 +297,19 @@ private final class HotkeyCaptureMonitor: ObservableObject {
         type: CGEventType
     ) {
         guard isActive,
-              type == .keyDown,
               let mode = captureMode,
               let appState = captureAppState,
               let onFinish = captureOnFinish else { return }
+        if type == .flagsChanged {
+            handleModifierChange(
+                definition: HotKeyDefinition.from(cgEvent: cgEvent, type: type),
+                mode: mode,
+                appState: appState,
+                onFinish: onFinish
+            )
+            return
+        }
+        guard type == .keyDown else { return }
         let keyCode = UInt16(cgEvent.getIntegerValueField(.keyboardEventKeycode))
         if keyCode == 53 {
             stop(appState: appState)
@@ -297,7 +321,33 @@ private final class HotkeyCaptureMonitor: ObservableObject {
             appState.hotkeySettingsMessage = "快捷键需要至少包含一个修饰键。"
             return
         }
+        pendingModifierOnlyHotkey = nil
         appState.assignHotkey(definition, to: mode)
+        stop(appState: appState)
+        onFinish()
+    }
+
+    private func handleModifierChange(
+        definition: HotKeyDefinition?,
+        mode: PipelineMode,
+        appState: AppState,
+        onFinish: () -> Void
+    ) {
+        guard isActive else { return }
+        if let definition {
+            if pendingModifierOnlyHotkey.map({ $0.modifierCount > definition.modifierCount }) != true {
+                pendingModifierOnlyHotkey = definition
+            }
+            if let pendingModifierOnlyHotkey {
+                appState.hotkeySettingsMessage = "已捕获 \(pendingModifierOnlyHotkey.displayName)。松开保存；继续按字母/数字键可保存组合键。"
+            }
+            return
+        }
+
+        guard let pendingModifierOnlyHotkey else {
+            return
+        }
+        appState.assignHotkey(pendingModifierOnlyHotkey, to: mode)
         stop(appState: appState)
         onFinish()
     }

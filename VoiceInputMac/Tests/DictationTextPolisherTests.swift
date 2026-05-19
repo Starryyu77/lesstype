@@ -25,4 +25,14 @@ final class DictationTextPolisherTests: XCTestCase {
         XCTAssertFalse(polished.contains("整理应该是正常"))
         XCTAssertFalse(polished.contains("整理看起来是正常"))
     }
+
+    func testRemovesWhisperTailCorrectionArtifact() {
+        let raw = "它的时间精度还是有点问题，而且它会在一句话讲完之后，有一个要求后续变更正的这个词会出现。这不奇怪吗？"
+        let polished = DictationTextPolisher().polish(raw)
+
+        XCTAssertTrue(polished.contains("时间精度还是有点问题"))
+        XCTAssertTrue(polished.contains("这不奇怪吗"))
+        XCTAssertFalse(polished.contains("要求后续"))
+        XCTAssertFalse(polished.contains("变更正"))
+    }
 }

@@ -38,10 +38,10 @@ final class HotKeyManager {
         let handler: (NSEvent) -> Void = { [weak self] event in
             self?.handle(event)
         }
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp], handler: handler) {
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged], handler: handler) {
             monitors.append(global)
         }
-        let local = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
+        let local = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { event in
             handler(event)
             return event
         }
@@ -78,6 +78,10 @@ final class HotKeyManager {
     private func handle(_ event: NSEvent) {
         guard !isCaptureSuspended else { return }
         onEventDebug?(HotKeyDefinition.describe(event))
+        if event.type == .flagsChanged {
+            handleFlagsChanged(event)
+            return
+        }
         guard let mode = mode(for: event) else { return }
         onEventDebug?("Matched \(mode.rawValue): \(HotKeyDefinition.describe(event))")
         if hotkeyMode == .toggle {
@@ -104,6 +108,36 @@ final class HotKeyManager {
         }
     }
 
+    private func handleFlagsChanged(_ event: NSEvent) {
+        if let mode = mode(for: event) {
+            onEventDebug?("Matched \(mode.rawValue): \(HotKeyDefinition.describe(event))")
+            if hotkeyMode == .toggle {
+                if let activeMode {
+                    self.activeMode = nil
+                    onRelease?(activeMode)
+                } else {
+                    activeMode = mode
+                    onPress?(mode)
+                }
+                return
+            }
+
+            if activeMode == nil {
+                activeMode = mode
+                onPress?(mode)
+            }
+            return
+        }
+
+        guard hotkeyMode == .pressToTalk,
+              let activeMode,
+              hotkeyDefinition(for: activeMode).isModifierOnly else {
+            return
+        }
+        self.activeMode = nil
+        onRelease?(activeMode)
+    }
+
     private func mode(for event: NSEvent) -> PipelineMode? {
         if dictationHotkey.matches(event) {
             if eventTapRegisteredModes.contains(.dictation) || carbonRegisteredModes.contains(.dictation) {
@@ -118,6 +152,15 @@ final class HotKeyManager {
             return .editSelection
         }
         return nil
+    }
+
+    private func hotkeyDefinition(for mode: PipelineMode) -> HotKeyDefinition {
+        switch mode {
+        case .dictation:
+            return dictationHotkey
+        case .editSelection:
+            return editSelectionHotkey
+        }
     }
 
     private func registerHotkeys() {
@@ -149,6 +192,7 @@ final class HotKeyManager {
 }
 
 struct HotKeyDefinition: Equatable {
+    static let modifierOnlyKeyCode = UInt16.max
     let keyCode: UInt16
     let modifiers: NSEvent.ModifierFlags
     private static let matchableModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift, .function]
@@ -166,63 +210,82 @@ struct HotKeyDefinition: Equatable {
             .split(separator: "+")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
             .filter { !$0.isEmpty }
-        guard let key = pieces.last, let keyCode = Self.keyCode(for: key) else {
-            return nil
-        }
         var modifiers = NSEvent.ModifierFlags()
-        for piece in pieces.dropLast() {
-            switch piece {
-            case "option", "opt", "alt":
-                modifiers.insert(.option)
-            case "shift":
-                modifiers.insert(.shift)
-            case "command", "cmd":
-                modifiers.insert(.command)
-            case "control", "ctrl":
-                modifiers.insert(.control)
-            case "fn", "function", "globe":
-                modifiers.insert(.function)
-            default:
+        var keyCode: UInt16?
+        for piece in pieces {
+            if let modifier = Self.modifier(for: piece) {
+                modifiers.insert(modifier)
+            } else if keyCode == nil, let code = Self.keyCode(for: piece) {
+                keyCode = code
+            } else {
                 return nil
             }
         }
-        self.init(keyCode: keyCode, modifiers: modifiers)
+        guard !modifiers.isEmpty else { return nil }
+        self.init(keyCode: keyCode ?? Self.modifierOnlyKeyCode, modifiers: modifiers)
     }
 
     static func from(event: NSEvent) -> HotKeyDefinition? {
-        guard event.type == .keyDown, !event.isARepeat else { return nil }
         let modifiers = normalizedModifiers(from: event.modifierFlags)
         guard !modifiers.isEmpty else { return nil }
+        if event.type == .flagsChanged {
+            return HotKeyDefinition(keyCode: Self.modifierOnlyKeyCode, modifiers: modifiers)
+        }
+        guard event.type == .keyDown, !event.isARepeat else { return nil }
         return HotKeyDefinition(keyCode: event.keyCode, modifiers: modifiers)
     }
 
     func matches(_ event: NSEvent) -> Bool {
         let eventModifiers = Self.normalizedModifiers(from: event.modifierFlags)
+        if isModifierOnly {
+            return event.type == .flagsChanged &&
+                eventModifiers == modifiers
+        }
+        guard event.type == .keyDown || event.type == .keyUp else { return false }
         return event.keyCode == keyCode &&
             eventModifiers == modifiers
     }
 
-    func matches(_ event: CGEvent) -> Bool {
+    func matches(_ event: CGEvent, type: CGEventType) -> Bool {
         let eventKeyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let eventModifiers = Self.normalizedModifiers(from: event.flags)
+        if isModifierOnly {
+            return type == .flagsChanged &&
+                eventModifiers == modifiers
+        }
+        guard type == .keyDown || type == .keyUp else { return false }
         return eventKeyCode == keyCode &&
             eventModifiers == modifiers
     }
 
     var canRegisterWithCarbon: Bool {
-        !modifiers.contains(.function)
+        !isModifierOnly && !modifiers.contains(.function)
+    }
+
+    var isModifierOnly: Bool {
+        keyCode == Self.modifierOnlyKeyCode
+    }
+
+    var modifierCount: Int {
+        Self.modifierNames(for: modifiers).count
     }
 
     var displayName: String {
-        let parts: [String] = [
+        var parts = Self.modifierNames(for: modifiers)
+        if !isModifierOnly {
+            parts.append(Self.keyName(for: keyCode))
+        }
+        return parts.joined(separator: "+")
+    }
+
+    private static func modifierNames(for modifiers: NSEvent.ModifierFlags) -> [String] {
+        [
             modifiers.contains(.function) ? "Fn" : nil,
             modifiers.contains(.control) ? "Control" : nil,
             modifiers.contains(.option) ? "Option" : nil,
             modifiers.contains(.shift) ? "Shift" : nil,
-            modifiers.contains(.command) ? "Command" : nil,
-            Self.keyName(for: keyCode)
+            modifiers.contains(.command) ? "Command" : nil
         ].compactMap { $0 }
-        return parts.joined(separator: "+")
     }
 
     var carbonModifiers: UInt32 {
@@ -244,24 +307,23 @@ struct HotKeyDefinition: Equatable {
 
     static func describe(_ event: NSEvent) -> String {
         let flags = normalizedModifiers(from: event.modifierFlags)
-        let parts: [String] = [
-            flags.contains(.function) ? "Fn" : nil,
-            flags.contains(.control) ? "Control" : nil,
-            flags.contains(.option) ? "Option" : nil,
-            flags.contains(.shift) ? "Shift" : nil,
-            flags.contains(.command) ? "Command" : nil,
-            keyName(for: event.keyCode)
-        ].compactMap { $0 }
-        return "\(event.type == .keyDown ? "keyDown" : "keyUp") keyCode=\(event.keyCode) flags=\(parts.joined(separator: "+"))"
+        var parts = modifierNames(for: flags)
+        if event.type != .flagsChanged {
+            parts.append(keyName(for: event.keyCode))
+        }
+        return "\(eventTypeName(event.type)) keyCode=\(event.keyCode) flags=\(parts.joined(separator: "+"))"
     }
 
     static func from(cgEvent: CGEvent, type: CGEventType) -> HotKeyDefinition? {
+        let modifiers = normalizedModifiers(from: cgEvent.flags)
+        guard !modifiers.isEmpty else { return nil }
+        if type == .flagsChanged {
+            return HotKeyDefinition(keyCode: Self.modifierOnlyKeyCode, modifiers: modifiers)
+        }
         guard type == .keyDown,
               cgEvent.getIntegerValueField(.keyboardEventAutorepeat) == 0 else {
             return nil
         }
-        let modifiers = normalizedModifiers(from: cgEvent.flags)
-        guard !modifiers.isEmpty else { return nil }
         let keyCode = UInt16(cgEvent.getIntegerValueField(.keyboardEventKeycode))
         return HotKeyDefinition(keyCode: keyCode, modifiers: modifiers)
     }
@@ -269,16 +331,55 @@ struct HotKeyDefinition: Equatable {
     static func describe(cgEvent: CGEvent, type: CGEventType) -> String {
         let flags = normalizedModifiers(from: cgEvent.flags)
         let keyCode = UInt16(cgEvent.getIntegerValueField(.keyboardEventKeycode))
-        let parts: [String] = [
-            flags.contains(.function) ? "Fn" : nil,
-            flags.contains(.control) ? "Control" : nil,
-            flags.contains(.option) ? "Option" : nil,
-            flags.contains(.shift) ? "Shift" : nil,
-            flags.contains(.command) ? "Command" : nil,
-            keyName(for: keyCode)
-        ].compactMap { $0 }
-        let typeName = type == .keyDown ? "keyDown" : type == .keyUp ? "keyUp" : "\(type.rawValue)"
+        var parts = modifierNames(for: flags)
+        if type != .flagsChanged {
+            parts.append(keyName(for: keyCode))
+        }
+        let typeName = cgEventTypeName(type)
         return "\(typeName) keyCode=\(keyCode) flags=\(parts.joined(separator: "+"))"
+    }
+
+    private static func modifier(for piece: String) -> NSEvent.ModifierFlags? {
+        switch piece {
+        case "option", "opt", "alt":
+            return .option
+        case "shift":
+            return .shift
+        case "command", "cmd":
+            return .command
+        case "control", "ctrl":
+            return .control
+        case "fn", "function", "globe":
+            return .function
+        default:
+            return nil
+        }
+    }
+
+    private static func eventTypeName(_ type: NSEvent.EventType) -> String {
+        switch type {
+        case .keyDown:
+            return "keyDown"
+        case .keyUp:
+            return "keyUp"
+        case .flagsChanged:
+            return "flagsChanged"
+        default:
+            return "\(type.rawValue)"
+        }
+    }
+
+    private static func cgEventTypeName(_ type: CGEventType) -> String {
+        switch type {
+        case .keyDown:
+            return "keyDown"
+        case .keyUp:
+            return "keyUp"
+        case .flagsChanged:
+            return "flagsChanged"
+        default:
+            return "\(type.rawValue)"
+        }
     }
 
     private static func normalizedModifiers(from flags: NSEvent.ModifierFlags) -> NSEvent.ModifierFlags {
@@ -433,7 +534,8 @@ private final class CGEventHotKeyMonitor {
 
         let mask =
             (CGEventMask(1) << CGEventType.keyDown.rawValue) |
-            (CGEventMask(1) << CGEventType.keyUp.rawValue)
+            (CGEventMask(1) << CGEventType.keyUp.rawValue) |
+            (CGEventMask(1) << CGEventType.flagsChanged.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, userInfo in
             guard let userInfo else {
                 return Unmanaged.passUnretained(event)
@@ -486,9 +588,13 @@ private final class CGEventHotKeyMonitor {
 
     private func handle(type: CGEventType, event: CGEvent) {
         guard !isCaptureSuspended else { return }
-        guard type == .keyDown || type == .keyUp else { return }
+        guard type == .keyDown || type == .keyUp || type == .flagsChanged else { return }
         onEventDebug?(HotKeyDefinition.describe(cgEvent: event, type: type))
-        guard let mode = mode(for: event) else { return }
+        if type == .flagsChanged {
+            handleFlagsChanged(event)
+            return
+        }
+        guard let mode = mode(for: event, type: type) else { return }
         onEventDebug?("CGEventTap matched \(mode.rawValue): \(HotKeyDefinition.describe(cgEvent: event, type: type))")
 
         if hotkeyMode == .toggle {
@@ -519,14 +625,53 @@ private final class CGEventHotKeyMonitor {
         }
     }
 
-    private func mode(for event: CGEvent) -> PipelineMode? {
-        if dictationHotkey.matches(event) {
+    private func handleFlagsChanged(_ event: CGEvent) {
+        if let mode = mode(for: event, type: .flagsChanged) {
+            onEventDebug?("CGEventTap matched \(mode.rawValue): \(HotKeyDefinition.describe(cgEvent: event, type: .flagsChanged))")
+            if hotkeyMode == .toggle {
+                if let activeMode {
+                    self.activeMode = nil
+                    onRelease?(activeMode)
+                } else {
+                    activeMode = mode
+                    onPress?(mode)
+                }
+                return
+            }
+
+            if activeMode == nil {
+                activeMode = mode
+                onPress?(mode)
+            }
+            return
+        }
+
+        guard hotkeyMode == .pressToTalk,
+              let activeMode,
+              hotkeyDefinition(for: activeMode).isModifierOnly else {
+            return
+        }
+        self.activeMode = nil
+        onRelease?(activeMode)
+    }
+
+    private func mode(for event: CGEvent, type: CGEventType) -> PipelineMode? {
+        if dictationHotkey.matches(event, type: type) {
             return .dictation
         }
-        if editSelectionHotkey.matches(event) {
+        if editSelectionHotkey.matches(event, type: type) {
             return .editSelection
         }
         return nil
+    }
+
+    private func hotkeyDefinition(for mode: PipelineMode) -> HotKeyDefinition {
+        switch mode {
+        case .dictation:
+            return dictationHotkey
+        case .editSelection:
+            return editSelectionHotkey
+        }
     }
 }
 
