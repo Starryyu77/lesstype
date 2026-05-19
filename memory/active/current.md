@@ -164,3 +164,6 @@
 - 修复：`DictationTextPolisher.removeKnownASRArtifacts` 暴露为最终出口清扫函数；`AccessibilityInjector.cleanFocusedText` 支持读取当前 focused AXValue、清理后写回并恢复光标。
 - 修复：`AppState.perform` 在 Accessibility 直接写入、CGEvent 直接键入、Pasteboard fallback 成功后都会调用 focused text 清扫，删除目标输入框中残留的 `要求后续变更/更正` 类短语。
 - 验证：`swift test` 37 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：17821。复查最近历史第 36-38 条 raw/final 均不含 `要求后续变更`。
+- 用户反馈：现在输入后没有任何显示，但历史会写入。复查 SQLite 第 39 条显示 pipeline 仍产出 `final_text=这是 Transformer Xr 的模型吗`，目标 App 为 `Codex/com.openai.codex`。判断为 Codex 富文本输入框的 AXValue 写入返回成功但实际未显示，导致 App 不进入 CGEvent/Pasteboard fallback。
+- 修复：`AppState.perform` 为 Codex/ChatGPT/Electron 类目标新增 keyboard-first 策略：跳过 Accessibility 直接写，优先 `CGEventTyper`，失败再 Pasteboard，最后才 AX。
+- 验证：`swift test` 37 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：23295。
