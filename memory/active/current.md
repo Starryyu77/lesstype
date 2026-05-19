@@ -156,3 +156,7 @@
 - 修复：设置页录制热键时也监听 `.flagsChanged`；按下纯修饰键会暂存，松开保存纯修饰键，继续按字母/数字键则保存组合键。多修饰键纯热键会保留最高阶组合，避免按 `Control+Option` 后松开时只保存成 `Control`。
 - 修复：`DictationTextPolisher` 增加 ASR 尾部噪声过滤，删除 `要求后续变更/要求后续更正/要求后续变更正` 等误识别残留。
 - 验证：`swift test` 34 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 使用 Apple Development 成功签名；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；本机运行 PID：93880。
+- 用户反馈“要求后续变更”仍会出现在结果中。复查最近历史后发现旧规则漏掉 `有一个什么要求后续变更正的这个词` 中的“什么”，且 `show_panel` action 未经过最终文本清洗。
+- 修复：ASR 尾部噪声过滤扩展为支持 `有一个什么...这个词`、繁体 `要求後續...`、空格拆字、`更改/修改` 等变体；清理残留的 `什么出现/这个词出现`。
+- 修复：`normalizeFinalAction` 现在对 `show_panel` 也执行词典与文本清洗，避免自动插入失败或低置信度展示时仍带出噪声。
+- 验证：`swift test` 36 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：12221。

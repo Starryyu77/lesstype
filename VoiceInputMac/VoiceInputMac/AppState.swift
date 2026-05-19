@@ -466,7 +466,10 @@ final class AppState: ObservableObject {
     }
 
     private func normalizeFinalAction(_ action: LLMAction) -> LLMAction {
-        guard action.action == "insert" || action.action == "replace_selection" else {
+        let shouldNormalizeText = action.action == "insert" ||
+            action.action == "replace_selection" ||
+            action.action == "show_panel"
+        guard shouldNormalizeText else {
             return action
         }
         let normalizedText = textPolisher.polish(normalizer.normalize(action.text, entries: dictionaryEntries))

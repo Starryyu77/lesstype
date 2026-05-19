@@ -35,4 +35,21 @@ final class DictationTextPolisherTests: XCTestCase {
         XCTAssertFalse(polished.contains("要求后续"))
         XCTAssertFalse(polished.contains("变更正"))
     }
+
+    func testRemovesCorrectionArtifactWithFillerWordsAndPrefix() {
+        let raw = "要求后续变更，还是会有这个不该出现的内容在"
+        let polished = DictationTextPolisher().polish(raw)
+
+        XCTAssertEqual(polished, "还是会有这个不该出现的内容在")
+        XCTAssertFalse(polished.contains("要求后续"))
+    }
+
+    func testRemovesCorrectionArtifactWithWhatFiller() {
+        let raw = "它会有一个什么要求后续变更正的这个词出现"
+        let polished = DictationTextPolisher().polish(raw)
+
+        XCTAssertEqual(polished, "它会出现")
+        XCTAssertFalse(polished.contains("要求后续"))
+        XCTAssertFalse(polished.contains("什么"))
+    }
 }

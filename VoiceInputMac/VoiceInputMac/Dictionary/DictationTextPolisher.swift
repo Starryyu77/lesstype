@@ -21,8 +21,10 @@ struct DictationTextPolisher {
     private func removeASRTailArtifacts(in text: String) -> String {
         var result = text
         let patterns = [
-            #"(?:(?:有)?一个)?要求后续(?:变更正|变更|更正)(?:的?这个词)?"#,
-            #"要求后续(?:变更正|变更|更正)"#
+            #"(?:(?:有)?一个(?:什么)?|什么)?\s*要\s*求\s*后\s*续\s*(?:变\s*更\s*正|变\s*更|更\s*正|更\s*改|修\s*改)(?:\s*的?\s*(?:这个|那个)?\s*词)?"#,
+            #"(?:(?:有)?一個(?:什麼)?|什麼)?\s*要\s*求\s*後\s*續\s*(?:變\s*更\s*正|變\s*更|更\s*正|更\s*改|修\s*改)(?:\s*的?\s*(?:這個|那個)?\s*詞)?"#,
+            #"要求后续(?:变更正|变更|更正|更改|修改)"#,
+            #"要求後續(?:變更正|變更|更正|更改|修改)"#
         ]
         for pattern in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
@@ -34,6 +36,11 @@ struct DictationTextPolisher {
             .replacingOccurrences(of: "有一个会出现", with: "会出现")
             .replacingOccurrences(of: "一个会出现", with: "会出现")
             .replacingOccurrences(of: "有一个出现", with: "出现")
+            .replacingOccurrences(of: "有一个什么出现", with: "出现")
+            .replacingOccurrences(of: "什么出现", with: "出现")
+            .replacingOccurrences(of: "这个词出现", with: "出现")
+            .replacingOccurrences(of: "那个词出现", with: "出现")
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "，,。.!！?？；;：:")))
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
