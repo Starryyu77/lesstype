@@ -4,59 +4,130 @@ import ApplicationServices
 import SwiftUI
 
 struct PermissionGuideView: View {
-    private var microphoneStatus: String {
+    private var microphoneStatus: PermissionStatus {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized:
-            return "已允许"
+            return .allowed
         case .denied:
-            return "已拒绝"
+            return .denied
         case .restricted:
-            return "受限制"
+            return .restricted
         case .notDetermined:
-            return "未决定"
+            return .unknown
         @unknown default:
-            return "未知"
+            return .unknown
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label("麦克风权限：\(microphoneStatus)", systemImage: "mic")
-            Label("辅助功能权限：\(AccessibilityPermission.isTrusted() ? "已允许" : "未允许")", systemImage: "accessibility")
-            Label("输入监听权限：\(CGPreflightListenEventAccess() ? "已允许" : "未允许")", systemImage: "keyboard")
-
-            Text("需要麦克风权限才能录音；需要辅助功能权限才能把文本插入当前 App；全局按住快捷键在部分系统设置下还需要输入监听权限。")
-                .foregroundStyle(.secondary)
-
-            Text("开发版如果每次重新打包并使用 ad-hoc 签名，macOS 可能会把它当成新 App 并重新要求授权。稳定使用时请固定同一个 .app，或使用 Apple Development / Developer ID 证书签名。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Button("打开麦克风设置") {
+        SettingsPage(
+            title: "权限",
+            subtitle: "macOS 需要显式授权麦克风、辅助功能和输入监听。",
+            systemImage: "lock.shield"
+        ) {
+            SettingsPanel("权限状态") {
+                PermissionRow(
+                    title: "麦克风",
+                    detail: "用于本地录音和保存临时 WAV。",
+                    systemImage: "mic",
+                    status: microphoneStatus
+                ) {
                     openPrivacyPane("Privacy_Microphone")
                 }
-                Button("打开辅助功能设置") {
+                SettingsDivider()
+                PermissionRow(
+                    title: "辅助功能",
+                    detail: "用于把文本写入当前 App，以及读取选中文本。",
+                    systemImage: "accessibility",
+                    status: AccessibilityPermission.isTrusted() ? .allowed : .denied
+                ) {
                     openPrivacyPane("Privacy_Accessibility")
                 }
-                Button("请求辅助功能权限") {
-                    _ = AccessibilityPermission.isTrusted(prompt: true)
-                }
-                Button("打开输入监听设置") {
+                SettingsDivider()
+                PermissionRow(
+                    title: "输入监听",
+                    detail: "Fn / Control / Option 等全局快捷键需要它。",
+                    systemImage: "keyboard",
+                    status: CGPreflightListenEventAccess() ? .allowed : .denied
+                ) {
                     openPrivacyPane("Privacy_ListenEvent")
                 }
-                Button("请求输入监听权限") {
-                    _ = CGRequestListenEventAccess()
+            }
+
+            SettingsPanel("请求授权") {
+                HStack(spacing: 10) {
+                    Button {
+                        _ = AccessibilityPermission.isTrusted(prompt: true)
+                    } label: {
+                        Label("请求辅助功能权限", systemImage: "accessibility")
+                    }
+                    Button {
+                        _ = CGRequestListenEventAccess()
+                    } label: {
+                        Label("请求输入监听权限", systemImage: "keyboard")
+                    }
+                    Spacer()
                 }
+                Text("如果开发版重新打包后权限失效，请删除系统设置里的旧 VoiceInputMac 项，再重新添加当前 dist/VoiceInputMac.app。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func openPrivacyPane(_ pane: String) {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
             NSWorkspace.shared.open(url)
+        }
+    }
+}
+
+private enum PermissionStatus {
+    case allowed
+    case denied
+    case restricted
+    case unknown
+
+    var title: String {
+        switch self {
+        case .allowed:
+            return "已允许"
+        case .denied:
+            return "未允许"
+        case .restricted:
+            return "受限制"
+        case .unknown:
+            return "未决定"
+        }
+    }
+
+    var tone: SettingsStatusLabel.Tone {
+        switch self {
+        case .allowed:
+            return .success
+        case .denied:
+            return .danger
+        case .restricted:
+            return .warning
+        case .unknown:
+            return .neutral
+        }
+    }
+}
+
+private struct PermissionRow: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+    let status: PermissionStatus
+    let openAction: () -> Void
+
+    var body: some View {
+        SettingsRow(title, detail: detail) {
+            HStack(spacing: 8) {
+                SettingsStatusLabel(text: status.title, systemImage: systemImage, tone: status.tone)
+                Button("打开设置", action: openAction)
+            }
         }
     }
 }

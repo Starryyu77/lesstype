@@ -7,8 +7,12 @@ struct HotkeySettingsView: View {
     @StateObject private var captureMonitor = HotkeyCaptureMonitor()
 
     var body: some View {
-        Form {
-            Section("全局快捷键") {
+        SettingsPage(
+            title: "快捷键",
+            subtitle: "配置普通听写、选中文本编辑和录音触发方式。",
+            systemImage: "keyboard"
+        ) {
+            SettingsPanel("全局快捷键", subtitle: "Fn / Control / Option 纯修饰键依赖输入监听权限。") {
                 HotkeyRecorderRow(
                     title: "普通听写",
                     value: appState.config.dictationHotkey,
@@ -28,53 +32,58 @@ struct HotkeySettingsView: View {
                     onCancelCapture: cancelCapture
                 )
                 if !appState.hotkeySettingsMessage.isEmpty {
-                    Text(appState.hotkeySettingsMessage)
+                    SettingsStatusLabel(text: appState.hotkeySettingsMessage, systemImage: "keyboard", tone: .info)
+                }
+            }
+
+            SettingsPanel("录音模式") {
+                SettingsRow("触发方式", detail: appState.config.hotkeyMode == .toggle ? "按一次开始录音，再按一次停止、识别并输入。" : "按住快捷键录音，松开后识别并输入。") {
+                    Picker("", selection: binding(\.hotkeyMode)) {
+                        ForEach(HotkeyMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                }
+                SettingsDivider()
+                HStack(spacing: 10) {
+                    Button {
+                        appState.useFnHotkeys()
+                    } label: {
+                        Label("使用 Fn+A", systemImage: "function")
+                    }
+                    Button {
+                        appState.useReliableFallbackHotkeys()
+                    } label: {
+                        Label("使用 Ctrl+Option+A", systemImage: "keyboard.badge.eye")
+                    }
+                    Button {
+                        appState.useToggleRecordingMode()
+                    } label: {
+                        Label("按一下开始/结束", systemImage: "record.circle")
+                    }
+                    Spacer()
+                }
+            }
+
+            SettingsPanel("诊断") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("最近捕获按键")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(appState.lastHotkeyEvent)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    Text("点击“录制”后按下新组合键；按 Esc 取消。纯 Fn / Control / Option 请确认输入监听权限已允许。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-
-            Picker("录音模式", selection: binding(\.hotkeyMode)) {
-                ForEach(HotkeyMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-            Text(appState.config.hotkeyMode == .toggle ? "当前：按一次开始录音，再按一次停止、识别并输入。" : "当前：按住快捷键录音，松开后识别并输入。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text("推荐使用 Ctrl+Option+A。Fn / Control / Option 组合键依赖输入监听权限；如果录制或触发失败，请在 Permissions 页请求输入监听权限。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text("点击“录制”后按下新组合键。需要至少包含一个修饰键，例如 Control、Option、Command、Shift 或 Fn。按 Esc 可取消录制。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("最近捕获按键")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(appState.lastHotkeyEvent)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-            }
-
-            HStack {
-                Button("使用 Fn+A") {
-                    appState.useFnHotkeys()
-                }
-                Button("使用更稳的 Ctrl+Option+A") {
-                    appState.useReliableFallbackHotkeys()
-                }
-                Button("使用按一下开始/结束") {
-                    appState.useToggleRecordingMode()
-                }
-            }
-
-            Button("保存快捷键设置") {
-                appState.saveConfig()
-            }
         }
-        .padding()
         .onDisappear {
             captureMonitor.stop(appState: appState)
             captureTarget = nil
@@ -123,19 +132,15 @@ private struct HotkeyRecorderRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(title)
-                .frame(width: 110, alignment: .leading)
-            Text(isCapturing ? "请按新的快捷键..." : displayValue)
-                .font(.system(.body, design: .monospaced))
+                .frame(width: 96, alignment: .leading)
+            KeyCapText(text: isCapturing ? "录制中..." : displayValue)
                 .foregroundStyle(isCapturing ? Color.accentColor : Color.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(Color(nsColor: .textBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+            Spacer()
             Button(isCapturing ? "取消" : "录制") {
                 toggleCapture()
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var displayValue: String {

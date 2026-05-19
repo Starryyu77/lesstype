@@ -10,12 +10,13 @@ final class SettingsWindowPresenter {
         let hosting = NSHostingView(rootView: SettingsView(appState: appState))
         if window == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 860, height: 600),
+                contentRect: NSRect(x: 0, y: 0, width: 980, height: 680),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
-            window.title = "VoiceInputMac"
+            window.title = "Lesstype Settings"
+            window.titlebarAppearsTransparent = false
             window.isReleasedWhenClosed = false
             self.window = window
         }
@@ -25,4 +26,3 @@ final class SettingsWindowPresenter {
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
 }
-

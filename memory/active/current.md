@@ -171,3 +171,12 @@
 - 修复：撤销 `要求后续变更` 类 ASR 文本过滤，`DictationTextPolisher` 不再删除用户实际说出的该短语；相关测试改为确认保留用户实际说出的 placeholder 文本。
 - 修复：移除插入后 focused text 清扫，不再读取并重写目标输入框来删除 placeholder；对 Codex/ChatGPT/Electron 类目标改成 pasteboard-first，失败再 CGEvent，最后才 AX，避免键盘事件接受 autocomplete suggestion。
 - 验证：`swift test` 34 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：29807。
+
+## 2026-05-19 UI 分支设计整理
+
+- 新建分支：`ui/settings-redesign`，用于单独推进设置窗口和基础面板视觉改造。
+- 设置窗口从顶部 `TabView` 改为 macOS 风格侧边栏 + 内容区：左侧保留通用、本地识别、文本模型、快捷键、个人词典、历史、场景风格、权限这些原有信息结构，右侧按页面显示。
+- 新增 `SettingsComponents.swift`：统一 `SettingsPage`、`SettingsPanel`、`SettingsRow`、`SettingsStatusLabel`、`SettingsEmptyState`、`KeyCapText`，减少每页各自散乱的 Form/List 样式。
+- 重做通用、ASR、LLM、快捷键、个人词典、历史、场景风格、权限页面：改为清晰标题、说明文字、分组面板、固定行宽控件、状态标签和更稳定的列表行。
+- 菜单栏弹窗、ResultPanel 和设置窗口尺寸/标题同步改为 `Lesstype` 视觉语言；未改 ASR/LLM/注入 pipeline。
+- 验证：`swift test` 34 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 使用 Apple Development 成功签名；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；本机 UI 分支运行 PID：40315。

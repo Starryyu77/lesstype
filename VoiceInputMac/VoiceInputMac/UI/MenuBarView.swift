@@ -5,14 +5,25 @@ struct MenuBarView: View {
     @ObservedObject var appState: AppState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(appState.phase.menuTitle, systemImage: appState.phase.symbolName)
-                .font(.headline)
-
-            Text(appState.message)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: appState.phase.symbolName)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(appState.phase == .error ? .red : .accentColor)
+                    .frame(width: 30, height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(Color.accentColor.opacity(0.12))
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Lesstype")
+                        .font(.headline)
+                    Text(appState.message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
 
             Divider()
 
@@ -62,8 +73,8 @@ struct MenuBarView: View {
                 Label("退出", systemImage: "power")
             }
         }
-        .padding(.vertical, 8)
-        .frame(width: 260)
+        .padding(12)
+        .frame(width: 286)
     }
 
     private func openSettingsWindow() {

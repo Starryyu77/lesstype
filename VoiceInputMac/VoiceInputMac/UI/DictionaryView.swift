@@ -10,7 +10,7 @@ struct DictionaryView: View {
     @State private var priority = 5
     @State private var searchText = ""
 
-    var filteredEntries: [DictionaryEntry] {
+    private var filteredEntries: [DictionaryEntry] {
         guard !searchText.isEmpty else { return appState.dictionaryEntries }
         return appState.dictionaryEntries.filter {
             $0.spoken.localizedCaseInsensitiveContains(searchText) ||
@@ -20,81 +20,70 @@ struct DictionaryView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                TextField("搜索词条", text: $searchText)
-                Button("刷新") { appState.loadLocalState() }
-            }
-
-            List(filteredEntries) { entry in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("\(entry.spoken) -> \(entry.written)")
-                        if !entry.aliases.isEmpty {
-                            Text(entry.aliasesText)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    Text("P\(entry.priority)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        SettingsPage(
+            title: "个人词典",
+            subtitle: "用于 ASR 后处理和 LLM prompt，保证专有名词写法稳定。",
+            systemImage: "book"
+        ) {
+            SettingsPanel("词条") {
+                HStack(spacing: 10) {
+                    TextField("搜索 spoken / written / aliases", text: $searchText)
+                        .textFieldStyle(.roundedBorder)
                     Button {
-                        load(entry)
+                        appState.loadLocalState()
                     } label: {
-                        Image(systemName: "pencil")
+                        Label("刷新", systemImage: "arrow.clockwise")
                     }
-                    .buttonStyle(.borderless)
-                    Button(role: .destructive) {
-                        if let id = entry.id {
-                            try? appState.dictionaryStore.delete(id: id)
-                            appState.loadLocalState()
+                }
+
+                if filteredEntries.isEmpty {
+                    SettingsEmptyState(title: "没有词条", detail: "添加术语后，听写会优先使用 written 形式。", systemImage: "book")
+                } else {
+                    LazyVStack(spacing: 8) {
+                        ForEach(filteredEntries) { entry in
+                            DictionaryEntryRow(entry: entry, load: load, delete: delete)
                         }
-                    } label: {
-                        Image(systemName: "trash")
                     }
-                    .buttonStyle(.borderless)
                 }
             }
 
-            Divider()
-
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
-                GridRow {
-                    Text("Spoken")
+            SettingsPanel(editingID == nil ? "添加词条" : "编辑词条") {
+                SettingsRow("Spoken", detail: "用户可能说出的形式。") {
                     TextField("cursor", text: $spoken)
+                        .textFieldStyle(.roundedBorder)
                 }
-                GridRow {
-                    Text("Written")
+                SettingsDivider()
+                SettingsRow("Written", detail: "最终应写入文本的形式。") {
                     TextField("Cursor", text: $written)
+                        .textFieldStyle(.roundedBorder)
                 }
-                GridRow {
-                    Text("Aliases")
-                    TextField("逗号分隔", text: $aliases)
+                SettingsDivider()
+                SettingsRow("Aliases", detail: "逗号分隔，例如 type less, swiftui。") {
+                    TextField("aliases", text: $aliases)
+                        .textFieldStyle(.roundedBorder)
                 }
-                GridRow {
-                    Text("Scope")
+                SettingsDivider()
+                SettingsRow("Scope") {
                     TextField("global", text: $scope)
+                        .textFieldStyle(.roundedBorder)
                 }
-                GridRow {
-                    Text("Priority")
+                SettingsDivider()
+                SettingsRow("Priority") {
                     Stepper("\(priority)", value: $priority, in: 0...100)
                 }
-            }
 
-            HStack {
-                Button(editingID == nil ? "添加词条" : "保存修改") {
-                    save()
-                }
-                .disabled(spoken.isEmpty || written.isEmpty)
-
-                Button("清空表单") {
-                    resetForm()
+                HStack(spacing: 10) {
+                    Button(editingID == nil ? "添加词条" : "保存修改") {
+                        save()
+                    }
+                    .disabled(spoken.isEmpty || written.isEmpty)
+                    Button("清空表单") {
+                        resetForm()
+                    }
+                    Spacer()
                 }
             }
         }
-        .padding()
     }
 
     private func load(_ entry: DictionaryEntry) {
@@ -104,6 +93,13 @@ struct DictionaryView: View {
         aliases = entry.aliasesText
         scope = entry.scope
         priority = entry.priority
+    }
+
+    private func delete(_ entry: DictionaryEntry) {
+        if let id = entry.id {
+            try? appState.dictionaryStore.delete(id: id)
+            appState.loadLocalState()
+        }
     }
 
     private func save() {
@@ -131,5 +127,50 @@ struct DictionaryView: View {
         aliases = ""
         scope = "global"
         priority = 5
+    }
+}
+
+private struct DictionaryEntryRow: View {
+    let entry: DictionaryEntry
+    let load: (DictionaryEntry) -> Void
+    let delete: (DictionaryEntry) -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(entry.spoken)
+                        .font(.system(.body, design: .monospaced))
+                    Image(systemName: "arrow.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(entry.written)
+                        .font(.headline)
+                }
+                if !entry.aliases.isEmpty {
+                    Text(entry.aliasesText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
+            SettingsStatusLabel(text: "P\(entry.priority)", systemImage: "number", tone: .neutral)
+            Button {
+                load(entry)
+            } label: {
+                Image(systemName: "pencil")
+            }
+            .buttonStyle(.borderless)
+            Button(role: .destructive) {
+                delete(entry)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(12)
+        .background(Color(nsColor: .textBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 7))
     }
 }
