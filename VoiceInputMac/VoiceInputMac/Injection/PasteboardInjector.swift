@@ -29,7 +29,7 @@ final class PasteboardInjector: TextInjector {
             throw AppError.injectionFailed("Unable to post Cmd+V event")
         }
 
-        try await Task.sleep(nanoseconds: 300_000_000)
+        try await Task.sleep(nanoseconds: 700_000_000)
         if restoreClipboard() {
             snapshot.restore(to: pasteboard)
         }
@@ -37,13 +37,15 @@ final class PasteboardInjector: TextInjector {
 
     private func postCommandV() -> Bool {
         let keyCodeForV: CGKeyCode = 9
-        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: keyCodeForV, keyDown: true),
-              let up = CGEvent(keyboardEventSource: nil, virtualKey: keyCodeForV, keyDown: false) else {
+        let source = CGEventSource(stateID: .hidSystemState)
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: keyCodeForV, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: keyCodeForV, keyDown: false) else {
             return false
         }
         down.flags = .maskCommand
         up.flags = .maskCommand
         down.post(tap: .cghidEventTap)
+        usleep(20_000)
         up.post(tap: .cghidEventTap)
         return true
     }

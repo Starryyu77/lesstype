@@ -15,5 +15,15 @@ final class JSONParsingTests: XCTestCase {
         XCTAssertEqual(action?.action, "show_panel")
         XCTAssertEqual(action?.warnings, ["low_confidence"])
     }
-}
 
+    func testParsesPartialActionJSONWithDefaults() {
+        let raw = #"{"action":"insert","text":"测试一下看看能不能用"}"#
+        let action = JSONRepair.parseAction(from: raw)
+        XCTAssertEqual(action?.action, "insert")
+        XCTAssertEqual(action?.text, "测试一下看看能不能用")
+        XCTAssertEqual(action?.detected_language, "unknown")
+        XCTAssertEqual(action?.format, "plain")
+        XCTAssertGreaterThanOrEqual(action?.confidence ?? 0, 0.5)
+        XCTAssertEqual(action?.warnings, [])
+    }
+}

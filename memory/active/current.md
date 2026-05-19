@@ -41,3 +41,12 @@
 - 新增回归测试：`AudioBufferWriterTests` 与 `WhisperCliServiceTests`。
 - 本机当前运行修复版：`dist/VoiceInputMac.app`，最近验证 `swift test` 20 个 XCTest 全部通过。
 - 权限反复请求的原因：本机 `security find-identity -v -p codesigning` 返回 0 个有效身份，当前只能 ad-hoc 签名；每次重新打包可能改变 TCC 识别，长期使用需要稳定 Apple Development / Developer ID 签名或固定使用同一个已授权 `.app`。
+
+## 2026-05-19 LLM JSON 与自动插入修复
+
+- 修复 DeepSeek / OpenAI-compatible 模型只返回 `{"action":"insert","text":"..."}` 时被严格 schema 解码拒绝的问题：`JSONRepair` 现在会对缺失字段补默认值，并只把 `text` 作为最终插入文本。
+- 该问题的表象是历史记录里 `action=show_panel`，`final_text` 变成整段 JSON，因此不会进入自动插入链路。
+- 剪贴板 fallback 已加固：使用 `CGEventSource(stateID: .hidSystemState)` 发送 Cmd+V，keyDown/keyUp 之间增加短延迟，恢复剪贴板前等待从 300ms 增加到 700ms。
+- 新增回归测试：`JSONParsingTests.testParsesPartialActionJSONWithDefaults`。
+- 验证：`swift test` 21 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 成功；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 成功。
+- 本机已重启为新构建版本，进程 PID：42484。
