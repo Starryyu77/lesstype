@@ -79,6 +79,10 @@ final class WhisperCliService: ASRProvider {
                 try? FileManager.default.removeItem(at: transcriptURL)
 
                 if process.terminationStatus == 0 {
+                    if Self.isEmptyTestModelOutput(errorOutput) {
+                        continuation.resume(throwing: AppError.asrFailed("当前 Whisper 模型是 whisper.cpp 测试模型，没有可用权重，无法识别语音。请在 ASR 设置中换成真实 ggml 模型。"))
+                        return
+                    }
                     continuation.resume(returning: transcript.isEmpty ? output : transcript)
                 } else {
                     let sanitized = errorOutput.replacingOccurrences(of: "Authorization: Bearer [^\\n]+", with: "Authorization: Bearer <redacted>", options: .regularExpression)
@@ -133,5 +137,10 @@ final class WhisperCliService: ASRProvider {
             "CPU backend"
         ]
         return diagnosticFragments.contains(where: line.contains)
+    }
+
+    private static func isEmptyTestModelOutput(_ output: String) -> Bool {
+        output.localizedCaseInsensitiveContains("no tensors loaded from model file") ||
+            output.localizedCaseInsensitiveContains("assuming empty model for testing")
     }
 }

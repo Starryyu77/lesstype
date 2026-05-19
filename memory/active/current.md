@@ -35,6 +35,9 @@
 
 - 修复录音后闪退：`AudioRecorder` 不再在 CoreAudio 实时 tap 线程中用 `AVAudioFile.write` 转换/写 WAV，改为收集 mono float samples，停止录音后离线写 16kHz mono PCM16 WAV。
 - 修复 whisper.cpp backend 日志被插入：`WhisperCliService` 成功路径优先使用 `-otxt -of` 生成的 transcript 文件，不再在 stdout 为空时把 stderr 当作 ASR 文本；`clean` 也会过滤 `load_backend:`、`ggml_`、`whisper_` 等诊断行。
+- 修复“没有有效输入内容”误导：本机之前配置的是 Homebrew 的 `for-tests-ggml-tiny.bin` 空测试模型，`whisper-cli` 输出 `WARN no tensors loaded from model file - assuming empty model for testing`；现在 `WhisperCliService` 会把这种情况提示为模型不可用。
+- 已下载真实多语言模型 `VoiceInputMac/Models/ggml-small.bin`（gitignore，不提交），并把本机配置更新为 `whisperModel=small`、`whisperModelPath=/Users/starryyu/2026/lesstype/VoiceInputMac/Models/ggml-small.bin`、`whisperLanguage=zh`。
+- 已用 `whisper-cli` 验证：`ggml-small.bin` 可转写 Homebrew `jfk.wav`，也可转写本机 `say -v Tingting` 生成的中文 WAV。
 - 新增回归测试：`AudioBufferWriterTests` 与 `WhisperCliServiceTests`。
-- 本机当前运行修复版：`dist/VoiceInputMac.app`，最近验证 `swift test` 19 个 XCTest 全部通过。
+- 本机当前运行修复版：`dist/VoiceInputMac.app`，最近验证 `swift test` 20 个 XCTest 全部通过。
 - 权限反复请求的原因：本机 `security find-identity -v -p codesigning` 返回 0 个有效身份，当前只能 ad-hoc 签名；每次重新打包可能改变 TCC 识别，长期使用需要稳定 Apple Development / Developer ID 签名或固定使用同一个已授权 `.app`。
