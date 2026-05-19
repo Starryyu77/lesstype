@@ -1,0 +1,392 @@
+import AppKit
+import Foundation
+
+@MainActor
+final class AppState: ObservableObject {
+    static let shared = AppState()
+
+    @Published var phase: AppPhase = .idle
+    @Published var message: String = "Ready"
+    @Published var lastError: String?
+    @Published var config: AppConfig = AppConfig()
+    @Published var dictionaryEntries: [DictionaryEntry] = []
+    @Published var styleProfiles: [StyleProfile] = []
+    @Published var historyItems: [HistoryItem] = []
+    @Published var apiKeyDraft: String = ""
+    @Published var asrCheckMessage: String = ""
+    @Published var llmCheckMessage: String = ""
+
+    let database: AppDatabase
+    let historyStore: HistoryStore
+    let dictionaryStore: DictionaryStore
+    let styleProfileStore: StyleProfileStore
+    let keychainStore: KeychainStore
+
+    private let settingsStore: SettingsStore
+    private let audioRecorder: AudioRecorder
+    private let asrService: ASRProvider
+    private let promptBuilder: PromptBuilder
+    private let llmProvider: LLMProvider
+    private let pasteboardInjector: TextInjector
+    private let accessibilityInjector: AccessibilityInjector
+    private let activeAppDetector: ActiveAppDetector
+    private let selectedTextReader: SelectedTextReader
+    private let normalizer = DictionaryNormalizer()
+    private let commandRouter = CommandRouter()
+    private let hotKeyManager = HotKeyManager()
+
+    private var activeRecordingMode: PipelineMode?
+    private var selectedTextAtRecordingStart: String = ""
+    private var recordingStartedAt: Date?
+
+    private init() {
+        do {
+            database = try AppDatabase.openDefault()
+        } catch {
+            fatalError("Unable to open local database: \(error)")
+        }
+        settingsStore = SettingsStore(database: database)
+        historyStore = HistoryStore(database: database)
+        dictionaryStore = DictionaryStore(database: database)
+        styleProfileStore = StyleProfileStore(database: database)
+        keychainStore = KeychainStore(service: "VoiceInputMac.Ark")
+        audioRecorder = AudioRecorder()
+        asrService = WhisperCliService()
+        promptBuilder = PromptBuilder()
+        llmProvider = ArkClient(configProvider: { AppState.shared.config }, keychainStore: keychainStore)
+        pasteboardInjector = PasteboardInjector(restoreClipboard: { AppState.shared.config.restoreClipboardAfterPaste })
+        accessibilityInjector = AccessibilityInjector()
+        activeAppDetector = ActiveAppDetector()
+        selectedTextReader = SelectedTextReader()
+    }
+
+    func start() {
+        loadLocalState()
+        hotKeyManager.start(
+            dictationHotkey: config.dictationHotkey,
+            editSelectionHotkey: config.editSelectionHotkey,
+            onPress: { [weak self] mode in
+                Task { @MainActor in self?.beginRecording(mode: mode) }
+            },
+            onRelease: { [weak self] mode in
+                Task { @MainActor in self?.finishRecording(mode: mode) }
+            }
+        )
+    }
+
+    func stop() {
+        hotKeyManager.stop()
+    }
+
+    func loadLocalState() {
+        config = settingsStore.loadConfig()
+        apiKeyDraft = (try? keychainStore.getSecret(account: "ark_api_key")) ?? ""
+        do {
+            try dictionaryStore.seedDefaultsIfNeeded()
+            try styleProfileStore.seedDefaultsIfNeeded()
+            dictionaryEntries = try dictionaryStore.fetchAll()
+            styleProfiles = try styleProfileStore.fetchAll()
+            historyItems = try historyStore.recent(limit: 100)
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func saveConfig() {
+        do {
+            try settingsStore.saveConfig(config)
+            hotKeyManager.update(dictationHotkey: config.dictationHotkey, editSelectionHotkey: config.editSelectionHotkey)
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func saveAPIKey() {
+        do {
+            try keychainStore.setSecret(apiKeyDraft, account: "ark_api_key")
+            message = "API Key saved to Keychain"
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func validateASRSetup() {
+        Task {
+            let modelOK = WhisperModelManager().validateModelPath(config.whisperModelPath)
+            guard modelOK else {
+                asrCheckMessage = "模型文件不存在：\(config.whisperModelPath.isEmpty ? "未配置" : config.whisperModelPath)"
+                return
+            }
+            let cliOK = await ProcessProbe.commandExists(config.whisperCLICommand)
+            asrCheckMessage = cliOK
+                ? "ASR 配置可用：已找到模型和 \(config.whisperCLICommand)"
+                : "找不到 \(config.whisperCLICommand)。请安装 whisper.cpp 或填写完整 CLI 路径。"
+        }
+    }
+
+    func testLLMConnection() {
+        Task {
+            do {
+                saveAPIKey()
+                let result = try await llmProvider.complete(
+                    systemPrompt: "你是连接测试。只返回 JSON。",
+                    userPrompt: #"请返回 {"action":"noop","text":"ok","detected_language":"zh","format":"plain","confidence":1.0,"warnings":[]}"#,
+                    options: LLMOptions(
+                        model: config.arkModel,
+                        temperature: 0,
+                        timeoutSeconds: config.arkTimeoutSeconds,
+                        responseFormat: "json_object"
+                    )
+                )
+                llmCheckMessage = result.parsed == nil
+                    ? "连接成功，但返回不是预期 JSON。"
+                    : "连接成功，耗时 \(result.durationMs) ms。"
+            } catch {
+                llmCheckMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    func beginRecording(mode: PipelineMode) {
+        guard phase == .idle || phase == .done || phase == .error else { return }
+        activeRecordingMode = mode
+        selectedTextAtRecordingStart = ""
+        recordingStartedAt = Date()
+
+        if mode == .editSelection {
+            selectedTextAtRecordingStart = (try? selectedTextReader.readSelectedText()) ?? ""
+        }
+
+        Task {
+            do {
+                phase = .recording
+                message = mode == .dictation ? "正在录音，松开以输入" : "正在录音编辑指令，松开以替换"
+                DictationOverlayPresenter.shared.show(message: message, phase: phase)
+                try await audioRecorder.startRecording(maxDurationSeconds: config.whisperMaxSegmentSeconds)
+            } catch {
+                await handle(error)
+            }
+        }
+    }
+
+    func finishRecording(mode: PipelineMode) {
+        guard activeRecordingMode == mode || activeRecordingMode == nil else { return }
+        Task {
+            do {
+                let audioURL = try audioRecorder.stopRecording()
+                try await runPipeline(audioURL: audioURL, mode: mode)
+            } catch {
+                await handle(error)
+            }
+        }
+    }
+
+    func runManualDictation() {
+        if phase == .recording {
+            finishRecording(mode: .dictation)
+        } else {
+            beginRecording(mode: .dictation)
+        }
+    }
+
+    func runManualEditSelection() {
+        if phase == .recording {
+            finishRecording(mode: .editSelection)
+        } else {
+            beginRecording(mode: .editSelection)
+        }
+    }
+
+    private func runPipeline(audioURL: URL, mode: PipelineMode) async throws {
+        defer {
+            activeRecordingMode = nil
+            recordingStartedAt = nil
+            if !config.saveAudio {
+                try? FileManager.default.removeItem(at: audioURL)
+            }
+        }
+
+        let pipelineStart = Date()
+        phase = .transcribing
+        message = "正在本地识别"
+        DictationOverlayPresenter.shared.show(message: message, phase: phase)
+
+        let asrOptions = ASROptions(
+            language: config.whisperLanguage,
+            useMetal: config.whisperUseMetal,
+            useCoreML: config.whisperUseCoreML,
+            maxSegmentSeconds: config.whisperMaxSegmentSeconds,
+            modelPath: config.whisperModelPath,
+            cliCommand: config.whisperCLICommand
+        )
+        let asrResult = try await asrService.transcribe(audioURL: audioURL, options: asrOptions)
+        let normalizedTranscript = normalizer.normalize(asrResult.text, entries: dictionaryEntries)
+        guard !normalizedTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AppError.emptyTranscript
+        }
+
+        let appContext = activeAppDetector.currentContext()
+        let selectedText = mode == .editSelection ? selectedTextAtRecordingStart : ""
+        let routedCommand = commandRouter.route(rawTranscript: normalizedTranscript, hasSelectedText: !selectedText.isEmpty)
+        if routedCommand.type == .systemCommand {
+            phase = .done
+            message = "已取消"
+            DictationOverlayPresenter.shared.hide(after: 0.5)
+            return
+        }
+        if mode == .editSelection && selectedText.isEmpty {
+            throw AppError.selectedTextUnavailable
+        }
+        let profile = styleProfileStore.matchProfile(
+            appName: appContext.activeApp,
+            bundleIdentifier: appContext.bundleIdentifier,
+            profiles: styleProfiles,
+            defaultProfileName: config.defaultStyleProfile
+        )
+
+        phase = .polishing
+        message = "正在润色文本"
+        DictationOverlayPresenter.shared.show(message: message, phase: phase)
+
+        let action = await buildAction(
+            mode: mode,
+            rawTranscript: normalizedTranscript,
+            selectedText: selectedText,
+            appContext: appContext,
+            styleProfile: profile
+        )
+
+        phase = .injecting
+        message = "正在插入文本"
+        DictationOverlayPresenter.shared.show(message: message, phase: phase)
+        try await perform(action: action)
+
+        let latency = Int(Date().timeIntervalSince(pipelineStart) * 1000)
+        if config.saveHistory {
+            try historyStore.insert(
+                rawASRText: normalizedTranscript,
+                finalText: action.text,
+                action: action.action,
+                context: appContext,
+                model: config.arkModel,
+                asrProvider: config.asrProvider,
+                llmProvider: config.llmProvider,
+                latencyMs: latency
+            )
+            historyItems = try historyStore.recent(limit: 100)
+        }
+
+        phase = .done
+        message = "完成"
+        DictationOverlayPresenter.shared.hide(after: 0.8)
+    }
+
+    private func buildAction(
+        mode: PipelineMode,
+        rawTranscript: String,
+        selectedText: String,
+        appContext: ActiveAppContext,
+        styleProfile: StyleProfile?
+    ) async -> LLMAction {
+        guard !apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !config.arkModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            lastError = AppError.llmAPIKeyMissing.localizedDescription
+            return PipelineFallback.actionWhenLLMUnavailable(
+                mode: mode,
+                transcript: rawTranscript,
+                language: config.whisperLanguage
+            )
+        }
+
+        do {
+            let prompt = try promptBuilder.build(
+                mode: mode,
+                activeApp: appContext.activeApp,
+                windowTitle: appContext.windowTitle,
+                selectedText: selectedText,
+                contextBefore: "",
+                personalDictionary: dictionaryEntries,
+                styleProfile: styleProfile,
+                rawTranscript: rawTranscript
+            )
+            let result = try await llmProvider.complete(
+                systemPrompt: prompt.system,
+                userPrompt: prompt.user,
+                options: LLMOptions(
+                    model: config.arkModel,
+                    temperature: config.arkTemperature,
+                    timeoutSeconds: config.arkTimeoutSeconds,
+                    responseFormat: "json_object"
+                )
+            )
+            if let parsed = result.parsed {
+                return parsed
+            }
+            return LLMAction(
+                action: "show_panel",
+                text: result.rawText,
+                detected_language: "unknown",
+                format: "plain",
+                confidence: 0.4,
+                warnings: ["json_parse_failed"]
+            )
+        } catch {
+            lastError = error.localizedDescription
+            return PipelineFallback.actionWhenLLMUnavailable(
+                mode: mode,
+                transcript: rawTranscript,
+                language: config.whisperLanguage
+            )
+        }
+    }
+
+    private func perform(action: LLMAction) async throws {
+        if action.action == "noop" {
+            return
+        }
+        if action.action == "show_panel" || action.confidence < 0.5 {
+            ResultPanelPresenter.shared.show(text: action.text, reason: action.warnings.joined(separator: ", "))
+            return
+        }
+
+        do {
+            if action.action == "replace_selection" {
+                try await accessibilityInjector.replaceSelectedText(action.text)
+            } else {
+                try await accessibilityInjector.insertText(action.text)
+            }
+        } catch {
+            do {
+                if action.action == "replace_selection" {
+                    try await pasteboardInjector.replaceSelectedText(action.text)
+                } else {
+                    try await pasteboardInjector.insertText(action.text)
+                }
+            } catch {
+                ResultPanelPresenter.shared.show(text: action.text, reason: AppError.injectionFailed("").errorDescription ?? "")
+            }
+        }
+    }
+
+    func clearHistory() {
+        do {
+            try historyStore.clear()
+            historyItems = []
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func refreshHistory() {
+        historyItems = (try? historyStore.recent(limit: 100)) ?? []
+    }
+
+    private func handle(_ error: Error) async {
+        phase = .error
+        lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        message = lastError ?? "Error"
+        DictationOverlayPresenter.shared.show(message: message, phase: phase)
+        DictationOverlayPresenter.shared.hide(after: 2)
+        activeRecordingMode = nil
+    }
+}

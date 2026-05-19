@@ -1,0 +1,59 @@
+- name: self_correction_date
+  raw: "呃我们明天不对下周一下午三点开会"
+  app: "WeChat"
+  expected_contains:
+    - "下周一下午三点"
+  expected_not_contains:
+    - "呃"
+    - "明天不对"
+
+- name: chat_short_message
+  raw: "帮我跟他说一下就是这个需求我今天做不完可能要明天上午给你"
+  app: "WeChat"
+  expected_style: "short_message"
+  expected_not_contains:
+    - "就是"
+
+- name: email_generation
+  raw: "请帮我写一封邮件告诉客户我们已经收到他的反馈然后会在两个工作日内回复"
+  app: "Mail"
+  expected_style: "email"
+  expected_contains:
+    - "收到"
+    - "反馈"
+    - "两个工作日"
+
+- name: soften_selected_text
+  selected_text: "这个功能不好用。"
+  instruction: "改得委婉一点"
+  expected_contains:
+    - "这个功能"
+    - "优化"
+
+- name: translate_selected_text
+  selected_text: "我们下周一下午三点开会。"
+  instruction: "翻译成英文"
+  expected_contains:
+    - "next Monday"
+
+- name: technical_terms
+  raw: "帮我写一下这个 cursor 里面 swift ui 和 whisper 点 cpp 的集成方案"
+  app: "Cursor"
+  expected_contains:
+    - "Cursor"
+    - "SwiftUI"
+    - "whisper.cpp"
+
+- name: cancel_command
+  raw: "算了不要了"
+  app: "WeChat"
+  expected_action: "noop"
+
+- name: markdown_notes
+  raw: "帮我列一下这个语音输入法的三个模块第一个录音第二个识别第三个润色"
+  app: "Notion"
+  expected_contains:
+    - "录音"
+    - "识别"
+    - "润色"
+

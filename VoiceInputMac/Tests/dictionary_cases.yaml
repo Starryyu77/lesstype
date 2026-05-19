@@ -1,0 +1,6 @@
+- raw: "cursor 里面 swift ui 和 whisper 点 cpp"
+  expected:
+    - "Cursor"
+    - "SwiftUI"
+    - "whisper.cpp"
+

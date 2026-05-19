@@ -1,0 +1,27 @@
+[
+  {
+    "name": "chat",
+    "app_pattern": "WeChat|Telegram|Feishu|Slack|Discord",
+    "prompt_suffix": "输出应简短、自然、像日常聊天。不要过度正式。不要自动添加称呼或签名。",
+    "examples": ""
+  },
+  {
+    "name": "email",
+    "app_pattern": "Mail|Gmail|Outlook",
+    "prompt_suffix": "输出应完整、礼貌、适合邮件沟通。可以适度正式，但不要编造称呼、签名或承诺。",
+    "examples": ""
+  },
+  {
+    "name": "notes",
+    "app_pattern": "Notion|Obsidian|Notes",
+    "prompt_suffix": "输出可以使用 Markdown、标题、列表和清晰段落。",
+    "examples": ""
+  },
+  {
+    "name": "code",
+    "app_pattern": "Cursor|Code|Xcode|Terminal|iTerm",
+    "prompt_suffix": "保留代码符号、变量名、技术名词和英文缩写。不要把代码片段自然语言化。",
+    "examples": ""
+  }
+]
+
