@@ -12,5 +12,15 @@ final class AppConfigTests: XCTestCase {
         XCTAssertEqual(config.customLLMBaseURL, "http://127.0.0.1:8000/v1")
         XCTAssertEqual(config.customLLMPath, "chat/completions")
     }
-}
 
+    func testMigratesLegacyOptionSpaceDefaultsToFnA() throws {
+        var config = try JSONDecoder().decode(
+            AppConfig.self,
+            from: Data(#"{"dictationHotkey":"Option+Space","editSelectionHotkey":"Option+Shift+Space"}"#.utf8)
+        )
+        config.migrateLegacyHotkeyDefaults()
+
+        XCTAssertEqual(config.dictationHotkey, "Fn+A")
+        XCTAssertEqual(config.editSelectionHotkey, "Fn+Shift+A")
+    }
+}

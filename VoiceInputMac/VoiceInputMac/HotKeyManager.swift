@@ -94,8 +94,8 @@ struct HotKeyDefinition: Equatable {
     let keyCode: UInt16
     let modifiers: NSEvent.ModifierFlags
 
-    static let defaultDictation = HotKeyDefinition(keyCode: 49, modifiers: [.option])
-    static let defaultEditSelection = HotKeyDefinition(keyCode: 49, modifiers: [.option, .shift])
+    static let defaultDictation = HotKeyDefinition(keyCode: 0, modifiers: [.function])
+    static let defaultEditSelection = HotKeyDefinition(keyCode: 0, modifiers: [.function, .shift])
 
     init(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
         self.keyCode = keyCode
@@ -121,6 +121,8 @@ struct HotKeyDefinition: Equatable {
                 modifiers.insert(.command)
             case "control", "ctrl":
                 modifiers.insert(.control)
+            case "fn", "function", "globe":
+                modifiers.insert(.function)
             default:
                 return nil
             }

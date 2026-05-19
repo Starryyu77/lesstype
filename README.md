@@ -5,7 +5,7 @@
 核心目标：
 
 - macOS 原生菜单栏 App，不使用 Electron / Tauri / Web 套壳。
-- `Option+Space` 按住录音，松开后本地 ASR、LLM 润色并插入当前输入框。
+- `Fn+A` 按住录音，松开后本地 ASR、LLM 润色并插入当前输入框。
 - 默认音频不上云，第一版使用 whisper.cpp CLI 在本地识别。
 - 只把识别后的文本发送到豆包 / 火山方舟 OpenAI-compatible API 做润色。
 - 也支持接入你自己的 OpenAI-compatible 文本 LLM API。

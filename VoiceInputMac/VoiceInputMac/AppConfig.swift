@@ -27,8 +27,8 @@ struct AppConfig: Codable, Equatable {
     var customLLMRequiresAPIKey: Bool = false
     var customLLMExtraHeadersJSON: String = ""
 
-    var dictationHotkey: String = "Option+Space"
-    var editSelectionHotkey: String = "Option+Shift+Space"
+    var dictationHotkey: String = "Fn+A"
+    var editSelectionHotkey: String = "Fn+Shift+A"
     var hotkeyMode: HotkeyMode = .pressToTalk
 
     var saveHistory: Bool = true
@@ -78,6 +78,17 @@ struct AppConfig: Codable, Equatable {
         restoreClipboardAfterPaste = try values.decodeIfPresent(Bool.self, forKey: .restoreClipboardAfterPaste) ?? defaults.restoreClipboardAfterPaste
         defaultStyleProfile = try values.decodeIfPresent(String.self, forKey: .defaultStyleProfile) ?? defaults.defaultStyleProfile
         logLevel = try values.decodeIfPresent(String.self, forKey: .logLevel) ?? defaults.logLevel
+    }
+}
+
+extension AppConfig {
+    mutating func migrateLegacyHotkeyDefaults() {
+        guard dictationHotkey == "Option+Space",
+              editSelectionHotkey == "Option+Shift+Space" else {
+            return
+        }
+        dictationHotkey = "Fn+A"
+        editSelectionHotkey = "Fn+Shift+A"
     }
 }
 

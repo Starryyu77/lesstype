@@ -80,7 +80,10 @@ final class AppState: ObservableObject {
     }
 
     func loadLocalState() {
-        config = settingsStore.loadConfig()
+        var loadedConfig = settingsStore.loadConfig()
+        loadedConfig.migrateLegacyHotkeyDefaults()
+        config = loadedConfig
+        try? settingsStore.saveConfig(config)
         loadSelectedAPIKeyDraft()
         do {
             try dictionaryStore.seedDefaultsIfNeeded()
