@@ -143,3 +143,6 @@
 - `HotKeyDefinition` 新增从 `NSEvent` 构造热键、规范化显示名、F1-F20、数字键、方向键、Delete 与 `KeyNN` 解析。
 - `AppState` 新增 `assignHotkey`、冲突检查和热键设置状态提示；保存后立即重新注册全局热键。
 - 验证：`swift test` 29 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：67570。
+- 用户反馈录制仍不行。定位为隐藏 `NSView` 不稳定拿到 first responder，且录制期间只是忽略旧全局热键，Carbon 注册仍可能吞掉事件。
+- 修复：热键录制改用设置窗口 `NSEvent.addLocalMonitorForEvents(.keyDown)`；开始录制时 `hotKeyManager.stop()` 完全注销旧全局热键，录制完成/取消后重新 `startHotKeyManager()` 注册；不再依赖隐藏 first-responder view。
+- 验证：`swift test` 29 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：73008。

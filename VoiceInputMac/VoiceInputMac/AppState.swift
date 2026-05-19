@@ -73,6 +73,10 @@ final class AppState: ObservableObject {
     func start() {
         loadLocalState()
         _ = AccessibilityPermission.isTrusted(prompt: true)
+        startHotKeyManager()
+    }
+
+    private func startHotKeyManager() {
         hotKeyManager.start(
             dictationHotkey: config.dictationHotkey,
             editSelectionHotkey: config.editSelectionHotkey,
@@ -150,7 +154,11 @@ final class AppState: ObservableObject {
     }
 
     func setHotkeyCaptureActive(_ active: Bool) {
-        hotKeyManager.setCaptureSuspended(active)
+        if active {
+            hotKeyManager.stop()
+        } else {
+            startHotKeyManager()
+        }
     }
 
     func assignHotkey(_ definition: HotKeyDefinition, to mode: PipelineMode) {

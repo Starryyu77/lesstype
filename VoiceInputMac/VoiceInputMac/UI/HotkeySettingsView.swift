@@ -4,6 +4,7 @@ import SwiftUI
 struct HotkeySettingsView: View {
     @ObservedObject var appState: AppState
     @State private var captureTarget: PipelineMode?
+    @StateObject private var captureMonitor = HotkeyCaptureMonitor()
 
     var body: some View {
         Form {
@@ -13,14 +14,18 @@ struct HotkeySettingsView: View {
                     value: appState.config.dictationHotkey,
                     mode: .dictation,
                     captureTarget: $captureTarget,
-                    appState: appState
+                    appState: appState,
+                    onStartCapture: { startCapture(.dictation, title: "普通听写") },
+                    onCancelCapture: cancelCapture
                 )
                 HotkeyRecorderRow(
                     title: "编辑选中文本",
                     value: appState.config.editSelectionHotkey,
                     mode: .editSelection,
                     captureTarget: $captureTarget,
-                    appState: appState
+                    appState: appState,
+                    onStartCapture: { startCapture(.editSelection, title: "编辑选中文本") },
+                    onCancelCapture: cancelCapture
                 )
                 if !appState.hotkeySettingsMessage.isEmpty {
                     Text(appState.hotkeySettingsMessage)
@@ -70,6 +75,10 @@ struct HotkeySettingsView: View {
             }
         }
         .padding()
+        .onDisappear {
+            captureMonitor.stop(appState: appState)
+            captureTarget = nil
+        }
     }
 
     private func binding<Value>(_ keyPath: WritableKeyPath<AppConfig, Value>) -> Binding<Value> {
@@ -81,6 +90,21 @@ struct HotkeySettingsView: View {
             }
         )
     }
+
+    private func startCapture(_ mode: PipelineMode, title: String) {
+        captureTarget = mode
+        appState.hotkeySettingsMessage = "正在录制 \(title) 快捷键。"
+        appState.setHotkeyCaptureActive(true)
+        captureMonitor.start(mode: mode, appState: appState) {
+            captureTarget = nil
+        }
+    }
+
+    private func cancelCapture() {
+        captureMonitor.stop(appState: appState)
+        captureTarget = nil
+        appState.hotkeySettingsMessage = "已取消录制。"
+    }
 }
 
 private struct HotkeyRecorderRow: View {
@@ -89,6 +113,8 @@ private struct HotkeyRecorderRow: View {
     let mode: PipelineMode
     @Binding var captureTarget: PipelineMode?
     @ObservedObject var appState: AppState
+    let onStartCapture: () -> Void
+    let onCancelCapture: () -> Void
 
     private var isCapturing: Bool {
         captureTarget == mode
@@ -110,26 +136,6 @@ private struct HotkeyRecorderRow: View {
                 toggleCapture()
             }
         }
-        .background(
-            HotkeyCaptureView(
-                isCapturing: isCapturing,
-                onCapture: { event in
-                    guard let definition = HotKeyDefinition.from(event: event) else {
-                        appState.hotkeySettingsMessage = "快捷键需要至少包含一个修饰键。"
-                        return
-                    }
-                    appState.assignHotkey(definition, to: mode)
-                    captureTarget = nil
-                    appState.setHotkeyCaptureActive(false)
-                },
-                onCancel: {
-                    captureTarget = nil
-                    appState.setHotkeyCaptureActive(false)
-                    appState.hotkeySettingsMessage = "已取消录制。"
-                }
-            )
-            .frame(width: 0, height: 0)
-        )
     }
 
     private var displayValue: String {
@@ -138,59 +144,62 @@ private struct HotkeyRecorderRow: View {
 
     private func toggleCapture() {
         if isCapturing {
-            captureTarget = nil
-            appState.setHotkeyCaptureActive(false)
-            appState.hotkeySettingsMessage = "已取消录制。"
+            onCancelCapture()
         } else {
-            captureTarget = mode
-            appState.setHotkeyCaptureActive(true)
-            appState.hotkeySettingsMessage = "正在录制 \(title) 快捷键。"
+            onStartCapture()
         }
     }
 }
 
-private struct HotkeyCaptureView: NSViewRepresentable {
-    let isCapturing: Bool
-    let onCapture: (NSEvent) -> Void
-    let onCancel: () -> Void
+@MainActor
+private final class HotkeyCaptureMonitor: ObservableObject {
+    private var monitor: Any?
 
-    func makeNSView(context: Context) -> HotkeyCaptureNSView {
-        let view = HotkeyCaptureNSView()
-        view.onCapture = onCapture
-        view.onCancel = onCancel
-        view.isCapturing = isCapturing
-        return view
-    }
-
-    func updateNSView(_ nsView: HotkeyCaptureNSView, context: Context) {
-        nsView.onCapture = onCapture
-        nsView.onCancel = onCancel
-        nsView.isCapturing = isCapturing
-        if isCapturing {
-            DispatchQueue.main.async {
-                nsView.window?.makeFirstResponder(nsView)
+    func start(mode: PipelineMode, appState: AppState, onFinish: @escaping () -> Void) {
+        stop(appState: nil)
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak appState] event in
+            Task { @MainActor in
+                guard let self, let appState else { return }
+                self.handle(event, mode: mode, appState: appState, onFinish: onFinish)
             }
+            return nil
         }
     }
-}
 
-private final class HotkeyCaptureNSView: NSView {
-    var isCapturing = false
-    var onCapture: ((NSEvent) -> Void)?
-    var onCancel: (() -> Void)?
-
-    override var acceptsFirstResponder: Bool { true }
-
-    override func keyDown(with event: NSEvent) {
-        guard isCapturing else {
-            super.keyDown(with: event)
-            return
+    func stop(appState: AppState?) {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
         }
+        monitor = nil
+        appState?.setHotkeyCaptureActive(false)
+    }
+
+    private func handle(
+        _ event: NSEvent,
+        mode: PipelineMode,
+        appState: AppState,
+        onFinish: () -> Void
+    ) {
         if event.keyCode == 53 {
-            onCancel?()
+            stop(appState: appState)
+            appState.hotkeySettingsMessage = "已取消录制。"
+            onFinish()
             return
         }
         guard !event.isARepeat else { return }
-        onCapture?(event)
+        guard let definition = HotKeyDefinition.from(event: event) else {
+            appState.hotkeySettingsMessage = "快捷键需要至少包含一个修饰键。"
+            return
+        }
+
+        appState.assignHotkey(definition, to: mode)
+        stop(appState: appState)
+        onFinish()
+    }
+
+    deinit {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+        }
     }
 }
