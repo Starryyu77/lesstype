@@ -42,7 +42,7 @@ struct HotkeySettingsView: View {
             Text(appState.config.hotkeyMode == .toggle ? "当前：按一次开始录音，再按一次停止、识别并输入。" : "当前：按住快捷键录音，松开后识别并输入。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("推荐使用 Ctrl+Option+A。Fn 键在部分 macOS 键盘设置下不会作为普通 modifier 传给应用；如果 Fn+A 没反应，请改用更稳的备用热键。")
+            Text("推荐使用 Ctrl+Option+A。Fn / Control / Option 组合键依赖输入监听权限；如果录制或触发失败，请在 Permissions 页请求输入监听权限。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text("点击“录制”后按下新组合键。需要至少包含一个修饰键，例如 Control、Option、Command、Shift 或 Fn。按 Esc 可取消录制。")
@@ -154,11 +154,19 @@ private struct HotkeyRecorderRow: View {
 @MainActor
 private final class HotkeyCaptureMonitor: ObservableObject {
     private var monitors: [Any] = []
+    private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
     private var isActive = false
+    private var captureMode: PipelineMode?
+    private weak var captureAppState: AppState?
+    private var captureOnFinish: (() -> Void)?
 
     func start(mode: PipelineMode, appState: AppState, onFinish: @escaping () -> Void) {
         stop(appState: nil)
         isActive = true
+        captureMode = mode
+        captureAppState = appState
+        captureOnFinish = onFinish
         if let local = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self, weak appState] event in
             Task { @MainActor in
                 guard let self, let appState else { return }
@@ -177,6 +185,7 @@ private final class HotkeyCaptureMonitor: ObservableObject {
         }) {
             monitors.append(global)
         }
+        startEventTap()
     }
 
     func stop(appState: AppState?) {
@@ -185,7 +194,63 @@ private final class HotkeyCaptureMonitor: ObservableObject {
             NSEvent.removeMonitor(monitor)
         }
         monitors.removeAll()
+        stopEventTap()
+        captureMode = nil
+        captureAppState = nil
+        captureOnFinish = nil
         appState?.setHotkeyCaptureActive(false)
+    }
+
+    private func startEventTap() {
+        guard CGPreflightListenEventAccess() || CGRequestListenEventAccess() else {
+            captureAppState?.hotkeySettingsMessage = "录制 Fn / Control / Option 组合键需要输入监听权限。"
+            return
+        }
+
+        let mask = CGEventMask(1) << CGEventType.keyDown.rawValue
+        let callback: CGEventTapCallBack = { _, type, event, userInfo in
+            guard let userInfo else {
+                return Unmanaged.passUnretained(event)
+            }
+            let monitor = Unmanaged<HotkeyCaptureMonitor>
+                .fromOpaque(userInfo)
+                .takeUnretainedValue()
+            Task { @MainActor in
+                monitor.handle(cgEvent: event, type: type)
+            }
+            return Unmanaged.passUnretained(event)
+        }
+
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: mask,
+            callback: callback,
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            captureAppState?.hotkeySettingsMessage = "无法启动底层键盘监听。请在系统设置中允许输入监听权限。"
+            return
+        }
+
+        eventTap = tap
+        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        if let runLoopSource {
+            CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        }
+        CGEvent.tapEnable(tap: tap, enable: true)
+    }
+
+    private func stopEventTap() {
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+            CFMachPortInvalidate(eventTap)
+        }
+        if let runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        }
+        eventTap = nil
+        runLoopSource = nil
     }
 
     private func handle(
@@ -212,9 +277,41 @@ private final class HotkeyCaptureMonitor: ObservableObject {
         onFinish()
     }
 
+    private func handle(
+        cgEvent: CGEvent,
+        type: CGEventType
+    ) {
+        guard isActive,
+              type == .keyDown,
+              let mode = captureMode,
+              let appState = captureAppState,
+              let onFinish = captureOnFinish else { return }
+        let keyCode = UInt16(cgEvent.getIntegerValueField(.keyboardEventKeycode))
+        if keyCode == 53 {
+            stop(appState: appState)
+            appState.hotkeySettingsMessage = "已取消录制。"
+            onFinish()
+            return
+        }
+        guard let definition = HotKeyDefinition.from(cgEvent: cgEvent, type: type) else {
+            appState.hotkeySettingsMessage = "快捷键需要至少包含一个修饰键。"
+            return
+        }
+        appState.assignHotkey(definition, to: mode)
+        stop(appState: appState)
+        onFinish()
+    }
+
     deinit {
         for monitor in monitors {
             NSEvent.removeMonitor(monitor)
+        }
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+            CFMachPortInvalidate(eventTap)
+        }
+        if let runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         }
     }
 }

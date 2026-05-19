@@ -13,6 +13,8 @@ final class HotKeyManager {
     private var hotkeyMode: HotkeyMode = .pressToTalk
     private let carbonMonitor = CarbonHotKeyMonitor()
     private var carbonRegisteredModes = Set<PipelineMode>()
+    private let eventTapMonitor = CGEventHotKeyMonitor()
+    private var eventTapRegisteredModes = Set<PipelineMode>()
     private var isCaptureSuspended = false
 
     func start(
@@ -31,7 +33,7 @@ final class HotKeyManager {
         self.onRelease = onRelease
         self.onEventDebug = onEventDebug
 
-        registerCarbonHotkeys()
+        registerHotkeys()
 
         let handler: (NSEvent) -> Void = { [weak self] event in
             self?.handle(event)
@@ -55,6 +57,8 @@ final class HotKeyManager {
         monitors.removeAll()
         carbonMonitor.stop()
         carbonRegisteredModes.removeAll()
+        eventTapMonitor.stop()
+        eventTapRegisteredModes.removeAll()
         activeMode = nil
     }
 
@@ -62,12 +66,13 @@ final class HotKeyManager {
         self.dictationHotkey = HotKeyDefinition(rawValue: dictationHotkey) ?? .defaultDictation
         self.editSelectionHotkey = HotKeyDefinition(rawValue: editSelectionHotkey) ?? .defaultEditSelection
         self.hotkeyMode = hotkeyMode
-        registerCarbonHotkeys()
+        registerHotkeys()
     }
 
     func setCaptureSuspended(_ suspended: Bool) {
         isCaptureSuspended = suspended
         carbonMonitor.setCaptureSuspended(suspended)
+        eventTapMonitor.setCaptureSuspended(suspended)
     }
 
     private func handle(_ event: NSEvent) {
@@ -101,13 +106,13 @@ final class HotKeyManager {
 
     private func mode(for event: NSEvent) -> PipelineMode? {
         if dictationHotkey.matches(event) {
-            if carbonRegisteredModes.contains(.dictation) {
+            if eventTapRegisteredModes.contains(.dictation) || carbonRegisteredModes.contains(.dictation) {
                 return nil
             }
             return .dictation
         }
         if editSelectionHotkey.matches(event) {
-            if carbonRegisteredModes.contains(.editSelection) {
+            if eventTapRegisteredModes.contains(.editSelection) || carbonRegisteredModes.contains(.editSelection) {
                 return nil
             }
             return .editSelection
@@ -115,8 +120,21 @@ final class HotKeyManager {
         return nil
     }
 
-    private func registerCarbonHotkeys() {
+    private func registerHotkeys() {
         guard let onPress, let onRelease, let onEventDebug else {
+            return
+        }
+        carbonMonitor.stop()
+        carbonRegisteredModes.removeAll()
+        eventTapRegisteredModes = eventTapMonitor.start(
+            dictationHotkey: dictationHotkey,
+            editSelectionHotkey: editSelectionHotkey,
+            hotkeyMode: hotkeyMode,
+            onPress: onPress,
+            onRelease: onRelease,
+            onEventDebug: onEventDebug
+        )
+        guard eventTapRegisteredModes.isEmpty else {
             return
         }
         carbonRegisteredModes = carbonMonitor.start(
@@ -184,6 +202,13 @@ struct HotKeyDefinition: Equatable {
             eventModifiers == modifiers
     }
 
+    func matches(_ event: CGEvent) -> Bool {
+        let eventKeyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+        let eventModifiers = Self.normalizedModifiers(from: event.flags)
+        return eventKeyCode == keyCode &&
+            eventModifiers == modifiers
+    }
+
     var canRegisterWithCarbon: Bool {
         !modifiers.contains(.function)
     }
@@ -230,10 +255,56 @@ struct HotKeyDefinition: Equatable {
         return "\(event.type == .keyDown ? "keyDown" : "keyUp") keyCode=\(event.keyCode) flags=\(parts.joined(separator: "+"))"
     }
 
+    static func from(cgEvent: CGEvent, type: CGEventType) -> HotKeyDefinition? {
+        guard type == .keyDown,
+              cgEvent.getIntegerValueField(.keyboardEventAutorepeat) == 0 else {
+            return nil
+        }
+        let modifiers = normalizedModifiers(from: cgEvent.flags)
+        guard !modifiers.isEmpty else { return nil }
+        let keyCode = UInt16(cgEvent.getIntegerValueField(.keyboardEventKeycode))
+        return HotKeyDefinition(keyCode: keyCode, modifiers: modifiers)
+    }
+
+    static func describe(cgEvent: CGEvent, type: CGEventType) -> String {
+        let flags = normalizedModifiers(from: cgEvent.flags)
+        let keyCode = UInt16(cgEvent.getIntegerValueField(.keyboardEventKeycode))
+        let parts: [String] = [
+            flags.contains(.function) ? "Fn" : nil,
+            flags.contains(.control) ? "Control" : nil,
+            flags.contains(.option) ? "Option" : nil,
+            flags.contains(.shift) ? "Shift" : nil,
+            flags.contains(.command) ? "Command" : nil,
+            keyName(for: keyCode)
+        ].compactMap { $0 }
+        let typeName = type == .keyDown ? "keyDown" : type == .keyUp ? "keyUp" : "\(type.rawValue)"
+        return "\(typeName) keyCode=\(keyCode) flags=\(parts.joined(separator: "+"))"
+    }
+
     private static func normalizedModifiers(from flags: NSEvent.ModifierFlags) -> NSEvent.ModifierFlags {
         flags
             .intersection(.deviceIndependentFlagsMask)
             .intersection(matchableModifiers)
+    }
+
+    private static func normalizedModifiers(from flags: CGEventFlags) -> NSEvent.ModifierFlags {
+        var result = NSEvent.ModifierFlags()
+        if flags.contains(.maskCommand) {
+            result.insert(.command)
+        }
+        if flags.contains(.maskAlternate) {
+            result.insert(.option)
+        }
+        if flags.contains(.maskControl) {
+            result.insert(.control)
+        }
+        if flags.contains(.maskShift) {
+            result.insert(.shift)
+        }
+        if flags.contains(.maskSecondaryFn) {
+            result.insert(.function)
+        }
+        return result
     }
 
     private static func keyCode(for key: String) -> UInt16? {
@@ -325,6 +396,138 @@ struct HotKeyDefinition: Equatable {
         11: 103, 12: 111, 13: 105, 14: 107, 15: 113,
         16: 106, 17: 64, 18: 79, 19: 80, 20: 90
     ]
+}
+
+private final class CGEventHotKeyMonitor {
+    private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+    private var dictationHotkey = HotKeyDefinition.defaultDictation
+    private var editSelectionHotkey = HotKeyDefinition.defaultEditSelection
+    private var activeMode: PipelineMode?
+    private var hotkeyMode: HotkeyMode = .pressToTalk
+    private var onPress: ((PipelineMode) -> Void)?
+    private var onRelease: ((PipelineMode) -> Void)?
+    private var onEventDebug: ((String) -> Void)?
+    private var isCaptureSuspended = false
+
+    func start(
+        dictationHotkey: HotKeyDefinition,
+        editSelectionHotkey: HotKeyDefinition,
+        hotkeyMode: HotkeyMode,
+        onPress: @escaping (PipelineMode) -> Void,
+        onRelease: @escaping (PipelineMode) -> Void,
+        onEventDebug: @escaping (String) -> Void
+    ) -> Set<PipelineMode> {
+        stop()
+        guard CGPreflightListenEventAccess() || CGRequestListenEventAccess() else {
+            onEventDebug("CGEventTap needs Input Monitoring permission")
+            return []
+        }
+
+        self.dictationHotkey = dictationHotkey
+        self.editSelectionHotkey = editSelectionHotkey
+        self.hotkeyMode = hotkeyMode
+        self.onPress = onPress
+        self.onRelease = onRelease
+        self.onEventDebug = onEventDebug
+
+        let mask =
+            (CGEventMask(1) << CGEventType.keyDown.rawValue) |
+            (CGEventMask(1) << CGEventType.keyUp.rawValue)
+        let callback: CGEventTapCallBack = { _, type, event, userInfo in
+            guard let userInfo else {
+                return Unmanaged.passUnretained(event)
+            }
+            let monitor = Unmanaged<CGEventHotKeyMonitor>
+                .fromOpaque(userInfo)
+                .takeUnretainedValue()
+            monitor.handle(type: type, event: event)
+            return Unmanaged.passUnretained(event)
+        }
+
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: mask,
+            callback: callback,
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            onEventDebug("CGEventTap registration failed")
+            return []
+        }
+
+        eventTap = tap
+        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        if let runLoopSource {
+            CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        }
+        CGEvent.tapEnable(tap: tap, enable: true)
+        onEventDebug("CGEventTap hotkeys registered")
+        return [.dictation, .editSelection]
+    }
+
+    func stop() {
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+            CFMachPortInvalidate(eventTap)
+        }
+        if let runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        }
+        eventTap = nil
+        runLoopSource = nil
+        activeMode = nil
+    }
+
+    func setCaptureSuspended(_ suspended: Bool) {
+        isCaptureSuspended = suspended
+    }
+
+    private func handle(type: CGEventType, event: CGEvent) {
+        guard !isCaptureSuspended else { return }
+        guard type == .keyDown || type == .keyUp else { return }
+        onEventDebug?(HotKeyDefinition.describe(cgEvent: event, type: type))
+        guard let mode = mode(for: event) else { return }
+        onEventDebug?("CGEventTap matched \(mode.rawValue): \(HotKeyDefinition.describe(cgEvent: event, type: type))")
+
+        if hotkeyMode == .toggle {
+            guard type == .keyDown,
+                  event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else {
+                return
+            }
+            if let activeMode {
+                self.activeMode = nil
+                onRelease?(activeMode)
+            } else {
+                activeMode = mode
+                onPress?(mode)
+            }
+            return
+        }
+
+        if type == .keyDown,
+           event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
+            if activeMode == nil {
+                activeMode = mode
+                onPress?(mode)
+            }
+        } else if type == .keyUp {
+            let releaseMode = activeMode ?? mode
+            activeMode = nil
+            onRelease?(releaseMode)
+        }
+    }
+
+    private func mode(for event: CGEvent) -> PipelineMode? {
+        if dictationHotkey.matches(event) {
+            return .dictation
+        }
+        if editSelectionHotkey.matches(event) {
+            return .editSelection
+        }
+        return nil
+    }
 }
 
 private final class CarbonHotKeyMonitor {

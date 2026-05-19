@@ -148,3 +148,6 @@
 - 验证：`swift test` 29 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：73008。
 - 用户继续反馈：Command 组合能用，但 Fn/Control/Option 不稳。修复：录制期间同时挂 local + global keyDown monitor；`HotKeyDefinition` 统一用 `.deviceIndependentFlagsMask` 标准化 modifier，避免 numericPad/系统附带 flag 干扰 Control/Option/Fn 识别。
 - 验证：`swift test` 30 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：77658。
+- 进一步修复：新增 `CGEventHotKeyMonitor` 作为运行时优先热键路径，使用 `.cgSessionEventTap + .listenOnly` 监听 keyDown/keyUp，支持 CoreGraphics `maskSecondaryFn`；CGEventTap 无输入监听权限时回退 Carbon。录制时也新增 CGEventTap 捕获，local/global/AppKit monitor 之外再走低层键盘事件。
+- Hotkeys 页文案更新：Fn / Control / Option 组合键依赖输入监听权限；如果录制或触发失败，需要在 Permissions 页请求输入监听权限。
+- 验证：`swift test` 31 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：87858。

@@ -80,6 +80,17 @@ final class HotKeyTests: XCTestCase {
         XCTAssertEqual(HotKeyDefinition(rawValue: "Control+Option+A")?.matches(event!), true)
     }
 
+    func testBuildsHotkeyFromCGEventWithFnFlag() {
+        let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true)
+        event?.flags = [.maskSecondaryFn, .maskControl]
+
+        XCTAssertEqual(
+            event.flatMap { HotKeyDefinition.from(cgEvent: $0, type: .keyDown) },
+            HotKeyDefinition(keyCode: 0, modifiers: [.function, .control])
+        )
+        XCTAssertEqual(event.flatMap { HotKeyDefinition.from(cgEvent: $0, type: .keyDown) }?.displayName, "Fn+Control+A")
+    }
+
     func testParsesFunctionDigitAndRawKeyNames() {
         XCTAssertEqual(
             HotKeyDefinition(rawValue: "Control+F12"),
