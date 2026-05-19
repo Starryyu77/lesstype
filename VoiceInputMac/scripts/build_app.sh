@@ -26,7 +26,8 @@ if [ -d "$BIN_DIR/${APP_NAME}_${APP_NAME}.bundle" ]; then
 fi
 
 if command -v codesign >/dev/null 2>&1 && [ "${SKIP_CODESIGN:-0}" != "1" ]; then
-  codesign --force --deep --sign - --entitlements "$ROOT_DIR/Support/VoiceInputMac.entitlements" "$APP_DIR"
+  CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
+  codesign --force --deep --sign "$CODESIGN_IDENTITY" --entitlements "$ROOT_DIR/Support/VoiceInputMac.entitlements" "$APP_DIR"
 fi
 
 echo "$APP_DIR"

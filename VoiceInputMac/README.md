@@ -66,6 +66,16 @@ open dist/VoiceInputMac.app
 
 `.app` 的 `Info.plist` 已声明麦克风用途，并设置为菜单栏常驻应用。第一次运行后，在系统设置里给 `VoiceInputMac.app` 授权麦克风、辅助功能和输入监听。
 
+开发期默认使用 ad-hoc 签名。macOS 的麦克风、辅助功能、输入监听权限会绑定到 bundle id、路径和代码签名要求；如果每次重新打包都换了 ad-hoc 签名摘要，系统可能再次要求授权。长期本机使用建议：
+
+```bash
+security find-identity -v -p codesigning
+CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)" bash scripts/build_app.sh debug
+open dist/VoiceInputMac.app
+```
+
+如果本机没有有效代码签名证书，就先避免频繁重打包；对同一个已打包 `.app` 授权一次后再日常使用。
+
 ## whisper.cpp 准备
 
 示例方式：
@@ -163,6 +173,10 @@ SQLite 默认位置：
 ### 无法录音
 
 检查麦克风权限。开发期 `swift run` 可能请求的是 Terminal 的麦克风权限。
+
+### 每次都要求重新输入密码授权
+
+这是开发期 ad-hoc 签名的副作用。每次重新构建 `.app` 后，代码签名摘要会变化，macOS TCC 可能把它当成新 App。使用稳定的 `Apple Development` / `Developer ID` 证书签名，或固定使用同一个已授权 `.app`，可以减少重复授权。
 
 ### 无法插入文本
 

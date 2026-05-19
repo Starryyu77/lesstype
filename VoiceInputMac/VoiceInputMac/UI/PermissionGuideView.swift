@@ -28,6 +28,10 @@ struct PermissionGuideView: View {
             Text("需要麦克风权限才能录音；需要辅助功能权限才能把文本插入当前 App；全局按住快捷键在部分系统设置下还需要输入监听权限。")
                 .foregroundStyle(.secondary)
 
+            Text("开发版如果每次重新打包并使用 ad-hoc 签名，macOS 可能会把它当成新 App 并重新要求授权。稳定使用时请固定同一个 .app，或使用 Apple Development / Developer ID 证书签名。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             HStack {
                 Button("打开麦克风设置") {
                     openPrivacyPane("Privacy_Microphone")

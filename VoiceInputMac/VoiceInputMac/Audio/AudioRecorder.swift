@@ -5,9 +5,7 @@ final class AudioRecorder: ObservableObject {
     @Published private(set) var meterLevel: Float = 0
 
     private let engine = AVAudioEngine()
-    private var outputFile: AVAudioFile?
     private var outputURL: URL?
-    private var converter: AVAudioConverter?
     private var isRecording = false
     private var stopWorkItem: DispatchWorkItem?
     private var enableVAD = false
@@ -17,6 +15,11 @@ final class AudioRecorder: ObservableObject {
     private var didRequestAutoStop = false
     private var recordingStartedAt: Date?
     private var onAutoStop: (() -> Void)?
+    private var inputSampleRate: Double = 0
+    private var capturedSamples: [Float] = []
+    private let captureLock = NSLock()
+    private let meterLock = NSLock()
+    private var meterUpdatePending = false
 
     func startRecording(maxDurationSeconds: Int, enableVAD: Bool = false, onAutoStop: (() -> Void)? = nil) async throws {
         guard !isRecording else { return }
@@ -34,18 +37,14 @@ final class AudioRecorder: ObservableObject {
 
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
-        guard let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true) else {
-            throw AppError.asrFailed("Unable to create 16kHz mono PCM format")
-        }
-        converter = AVAudioConverter(from: inputFormat, to: targetFormat)
+        resetCapture(inputFormat: inputFormat, maxDurationSeconds: maxDurationSeconds)
 
         let url = AudioBufferWriter.makeTemporaryWAVURL()
         outputURL = url
-        outputFile = try AVAudioFile(forWriting: url, settings: targetFormat.settings)
 
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { [weak self] buffer, _ in
-            self?.write(buffer: buffer, inputFormat: inputFormat, targetFormat: targetFormat)
+            self?.capture(buffer: buffer)
             self?.checkVAD(buffer: buffer)
         }
 
@@ -70,37 +69,98 @@ final class AudioRecorder: ObservableObject {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         isRecording = false
-        outputFile = nil
-        converter = nil
         onAutoStop = nil
         guard let url = outputURL else {
             throw AppError.asrFailed("Recording output was not created")
         }
+        let samples = drainCapturedSamples()
+        try AudioBufferWriter.writeMono16WAV(samples: samples, inputSampleRate: inputSampleRate, to: url)
         return url
     }
 
-    private func write(buffer: AVAudioPCMBuffer, inputFormat: AVAudioFormat, targetFormat: AVAudioFormat) {
-        updateMeter(buffer: buffer)
-        guard let converter, let outputFile else { return }
+    private func capture(buffer: AVAudioPCMBuffer) {
+        let samples = monoSamples(from: buffer)
+        guard !samples.isEmpty else { return }
+        captureLock.lock()
+        capturedSamples.append(contentsOf: samples)
+        captureLock.unlock()
+        updateMeter(samples: samples)
+    }
 
-        let ratio = targetFormat.sampleRate / inputFormat.sampleRate
-        let frameCapacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 32
-        guard let converted = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCapacity) else { return }
+    private func resetCapture(inputFormat: AVAudioFormat, maxDurationSeconds: Int) {
+        inputSampleRate = inputFormat.sampleRate
+        captureLock.lock()
+        capturedSamples.removeAll(keepingCapacity: true)
+        capturedSamples.reserveCapacity(Int(inputFormat.sampleRate * Double(maxDurationSeconds)))
+        captureLock.unlock()
+    }
 
-        var didProvideBuffer = false
-        var error: NSError?
-        converter.convert(to: converted, error: &error) { _, status in
-            if didProvideBuffer {
-                status.pointee = .noDataNow
-                return nil
+    private func drainCapturedSamples() -> [Float] {
+        captureLock.lock()
+        let samples = capturedSamples
+        capturedSamples.removeAll(keepingCapacity: false)
+        captureLock.unlock()
+        return samples
+    }
+
+    private func monoSamples(from buffer: AVAudioPCMBuffer) -> [Float] {
+        let frameCount = Int(buffer.frameLength)
+        let channelCount = max(Int(buffer.format.channelCount), 1)
+        guard frameCount > 0 else { return [] }
+
+        switch buffer.format.commonFormat {
+        case .pcmFormatFloat32:
+            if let channels = buffer.floatChannelData {
+                var output = [Float](repeating: 0, count: frameCount)
+                for channelIndex in 0..<channelCount {
+                    let channel = channels[channelIndex]
+                    for frameIndex in 0..<frameCount {
+                        output[frameIndex] += channel[frameIndex] / Float(channelCount)
+                    }
+                }
+                return output
             }
-            didProvideBuffer = true
-            status.pointee = .haveData
-            return buffer
+            return interleavedMonoSamples(buffer: buffer, frameCount: frameCount, channelCount: channelCount, as: Float.self) { $0 }
+
+        case .pcmFormatInt16:
+            if let channels = buffer.int16ChannelData {
+                var output = [Float](repeating: 0, count: frameCount)
+                for channelIndex in 0..<channelCount {
+                    let channel = channels[channelIndex]
+                    for frameIndex in 0..<frameCount {
+                        output[frameIndex] += Float(channel[frameIndex]) / Float(Int16.max) / Float(channelCount)
+                    }
+                }
+                return output
+            }
+            return interleavedMonoSamples(buffer: buffer, frameCount: frameCount, channelCount: channelCount, as: Int16.self) {
+                Float($0) / Float(Int16.max)
+            }
+
+        default:
+            return []
         }
-        if error == nil, converted.frameLength > 0 {
-            try? outputFile.write(from: converted)
+    }
+
+    private func interleavedMonoSamples<T>(
+        buffer: AVAudioPCMBuffer,
+        frameCount: Int,
+        channelCount: Int,
+        as type: T.Type,
+        normalize: (T) -> Float
+    ) -> [Float] {
+        let audioBuffers = UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList)
+        guard audioBuffers.count == 1, let data = audioBuffers[0].mData else { return [] }
+        let values = data.assumingMemoryBound(to: T.self)
+        var output = [Float](repeating: 0, count: frameCount)
+        for frameIndex in 0..<frameCount {
+            var sum: Float = 0
+            for channelIndex in 0..<channelCount {
+                sum += normalize(values[frameIndex * channelCount + channelIndex])
+            }
+            output[frameIndex] = sum / Float(channelCount)
         }
+        return output
     }
 
     private func checkVAD(buffer: AVAudioPCMBuffer) {
@@ -128,17 +188,29 @@ final class AudioRecorder: ObservableObject {
         }
     }
 
-    private func updateMeter(buffer: AVAudioPCMBuffer) {
-        guard let channel = buffer.floatChannelData?[0] else { return }
-        let count = Int(buffer.frameLength)
-        guard count > 0 else { return }
+    private func updateMeter(samples: [Float]) {
+        guard !samples.isEmpty else { return }
         var sum: Float = 0
-        for index in 0..<count {
-            sum += channel[index] * channel[index]
+        for sample in samples {
+            sum += sample * sample
         }
-        let rms = sqrt(sum / Float(count))
-        Task { @MainActor in
-            self.meterLevel = min(max(rms * 20, 0), 1)
+        let rms = sqrt(sum / Float(samples.count))
+        let level = min(max(rms * 20, 0), 1)
+
+        meterLock.lock()
+        guard !meterUpdatePending else {
+            meterLock.unlock()
+            return
+        }
+        meterUpdatePending = true
+        meterLock.unlock()
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.meterLevel = level
+            self.meterLock.lock()
+            self.meterUpdatePending = false
+            self.meterLock.unlock()
         }
     }
 
