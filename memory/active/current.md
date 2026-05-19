@@ -133,3 +133,5 @@
 - 修复 `CGEventTyper`：Unicode 文本只放在 keyDown 事件，keyUp 不再携带同一段文本，避免部分目标 App 同时消费 keyDown/keyUp 导致重复插入。
 - `AppState` 增加 `isPipelineRunning` 防重入锁，避免同一次录音结果被重复执行 pipeline/插入。
 - 验证：`swift test` 27 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：53712。
+- 追加定位：历史表最近记录 `final_text` 只有一遍，但输入框出现约 6 遍；这与 `AccessibilityInjector` 的 6 次重试吻合。原因是 AX 写入已经成功，但写后读取验证拿不到新值，导致误判失败并重复写入。已移除写后验证，`AXUIElementSetAttributeValue(kAXValueAttribute)` 成功后立即返回。
+- 验证：`swift test` 27 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：58841。

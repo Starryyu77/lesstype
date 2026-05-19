@@ -58,9 +58,6 @@ final class AccessibilityInjector: TextInjector {
         guard AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, newValue as CFTypeRef) == .success else {
             return false
         }
-        guard stringAttribute(kAXValueAttribute, from: element) == newValue else {
-            return false
-        }
 
         var caretRange = CFRange(location: selectedRange.location + text.utf16.count, length: 0)
         if let caretValue = AXValueCreate(.cfRange, &caretRange) {
