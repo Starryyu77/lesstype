@@ -14,6 +14,7 @@
 - AVAudioEngine 录音，输出 16kHz mono PCM WAV 临时文件。
 - whisper.cpp CLI ASR：默认本地模型，默认不上传音频。
 - OpenAI-compatible Ark 客户端：base URL、model、temperature、timeout 可配置。
+- 自定义 OpenAI-compatible 文本 LLM endpoint：base URL、path、model、header、API Key 是否必需可配置。
 - API Key 存入 macOS Keychain。
 - Prompt 文件与 JSON schema 解析 / 修复。
 - 个人词典与 App 风格 profile。
@@ -21,17 +22,16 @@
 - Accessibility 注入尝试与选中文本读取。
 - SQLite 历史记录，默认保存文本历史，默认不保存音频。
 - 插入失败时显示可复制结果浮窗。
+- Toggle 模式与基础 VAD 自动结束。
 
 ## 尚未完成
 
 - whisper.cpp C API / XCFramework 常驻模型集成。
 - large-v3-turbo 自动下载与模型管理 UI。
 - Core ML / ANE 加速。
-- 动态快捷键重绑定。
-- 更完整的 VAD 自动结束。
+- 更精细的 VAD 参数 UI 与噪声环境自适应。
 - 更可靠的 AX 文本范围替换。
-- API 测试连接按钮的真实端到端测试。
-- App bundle / codesign / notarization 发布配置。
+- notarization 发布配置。
 
 ## 环境要求
 
@@ -100,6 +100,20 @@ whisper-cli --help
 - Timeout：默认 `20` 秒
 
 没有 API Key 或模型名时，App 不会调用 LLM，会直接插入本地 ASR 文本。
+
+## 自定义 API 接入
+
+如果不想直接接豆包 / 火山方舟，可以在 LLM 设置页选择：
+
+```text
+Provider = 自定义 OpenAI-compatible
+```
+
+你的服务需要实现 OpenAI-compatible `chat/completions`，输入是文本 prompt，输出是 `choices[0].message.content`。`content` 最好直接返回本 App 要求的 JSON。
+
+详细接口见 [`Docs/API_PROVIDER_INTERFACE.md`](Docs/API_PROVIDER_INTERFACE.md)。
+
+当前架构不需要语音大模型：语音已经由本地 whisper.cpp 转成文本，LLM 只负责文本润色、改写和 JSON action 决策。只有当你决定把音频上传给 API，由云端同时做 ASR 和改写时，才需要语音大模型。
 
 ## 快捷键
 

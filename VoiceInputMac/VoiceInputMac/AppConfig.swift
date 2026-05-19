@@ -19,6 +19,13 @@ struct AppConfig: Codable, Equatable {
     var arkModel: String = ""
     var arkTemperature: Double = 0.2
     var arkTimeoutSeconds: Int = 20
+    var customLLMBaseURL: String = "http://127.0.0.1:8000/v1"
+    var customLLMPath: String = "chat/completions"
+    var customLLMModel: String = ""
+    var customLLMAuthHeader: String = "Authorization"
+    var customLLMAuthScheme: String = "Bearer"
+    var customLLMRequiresAPIKey: Bool = false
+    var customLLMExtraHeadersJSON: String = ""
 
     var dictationHotkey: String = "Option+Space"
     var editSelectionHotkey: String = "Option+Shift+Space"
@@ -29,6 +36,65 @@ struct AppConfig: Codable, Equatable {
     var restoreClipboardAfterPaste: Bool = true
     var defaultStyleProfile: String = "auto"
     var logLevel: String = "info"
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = AppConfig()
+
+        asrProvider = try values.decodeIfPresent(String.self, forKey: .asrProvider) ?? defaults.asrProvider
+        whisperRuntime = try values.decodeIfPresent(String.self, forKey: .whisperRuntime) ?? defaults.whisperRuntime
+        whisperModel = try values.decodeIfPresent(String.self, forKey: .whisperModel) ?? defaults.whisperModel
+        whisperModelPath = try values.decodeIfPresent(String.self, forKey: .whisperModelPath) ?? defaults.whisperModelPath
+        whisperLanguage = try values.decodeIfPresent(String.self, forKey: .whisperLanguage) ?? defaults.whisperLanguage
+        whisperKeepModelLoaded = try values.decodeIfPresent(Bool.self, forKey: .whisperKeepModelLoaded) ?? defaults.whisperKeepModelLoaded
+        whisperUseMetal = try values.decodeIfPresent(Bool.self, forKey: .whisperUseMetal) ?? defaults.whisperUseMetal
+        whisperUseCoreML = try values.decodeIfPresent(Bool.self, forKey: .whisperUseCoreML) ?? defaults.whisperUseCoreML
+        whisperEnableVAD = try values.decodeIfPresent(Bool.self, forKey: .whisperEnableVAD) ?? defaults.whisperEnableVAD
+        whisperMaxSegmentSeconds = try values.decodeIfPresent(Int.self, forKey: .whisperMaxSegmentSeconds) ?? defaults.whisperMaxSegmentSeconds
+        whisperThreads = try values.decodeIfPresent(String.self, forKey: .whisperThreads) ?? defaults.whisperThreads
+        whisperCLICommand = try values.decodeIfPresent(String.self, forKey: .whisperCLICommand) ?? defaults.whisperCLICommand
+
+        llmProvider = try values.decodeIfPresent(String.self, forKey: .llmProvider) ?? defaults.llmProvider
+        arkBaseURL = try values.decodeIfPresent(String.self, forKey: .arkBaseURL) ?? defaults.arkBaseURL
+        arkModel = try values.decodeIfPresent(String.self, forKey: .arkModel) ?? defaults.arkModel
+        arkTemperature = try values.decodeIfPresent(Double.self, forKey: .arkTemperature) ?? defaults.arkTemperature
+        arkTimeoutSeconds = try values.decodeIfPresent(Int.self, forKey: .arkTimeoutSeconds) ?? defaults.arkTimeoutSeconds
+        customLLMBaseURL = try values.decodeIfPresent(String.self, forKey: .customLLMBaseURL) ?? defaults.customLLMBaseURL
+        customLLMPath = try values.decodeIfPresent(String.self, forKey: .customLLMPath) ?? defaults.customLLMPath
+        customLLMModel = try values.decodeIfPresent(String.self, forKey: .customLLMModel) ?? defaults.customLLMModel
+        customLLMAuthHeader = try values.decodeIfPresent(String.self, forKey: .customLLMAuthHeader) ?? defaults.customLLMAuthHeader
+        customLLMAuthScheme = try values.decodeIfPresent(String.self, forKey: .customLLMAuthScheme) ?? defaults.customLLMAuthScheme
+        customLLMRequiresAPIKey = try values.decodeIfPresent(Bool.self, forKey: .customLLMRequiresAPIKey) ?? defaults.customLLMRequiresAPIKey
+        customLLMExtraHeadersJSON = try values.decodeIfPresent(String.self, forKey: .customLLMExtraHeadersJSON) ?? defaults.customLLMExtraHeadersJSON
+
+        dictationHotkey = try values.decodeIfPresent(String.self, forKey: .dictationHotkey) ?? defaults.dictationHotkey
+        editSelectionHotkey = try values.decodeIfPresent(String.self, forKey: .editSelectionHotkey) ?? defaults.editSelectionHotkey
+        hotkeyMode = try values.decodeIfPresent(HotkeyMode.self, forKey: .hotkeyMode) ?? defaults.hotkeyMode
+
+        saveHistory = try values.decodeIfPresent(Bool.self, forKey: .saveHistory) ?? defaults.saveHistory
+        saveAudio = try values.decodeIfPresent(Bool.self, forKey: .saveAudio) ?? defaults.saveAudio
+        restoreClipboardAfterPaste = try values.decodeIfPresent(Bool.self, forKey: .restoreClipboardAfterPaste) ?? defaults.restoreClipboardAfterPaste
+        defaultStyleProfile = try values.decodeIfPresent(String.self, forKey: .defaultStyleProfile) ?? defaults.defaultStyleProfile
+        logLevel = try values.decodeIfPresent(String.self, forKey: .logLevel) ?? defaults.logLevel
+    }
+}
+
+enum LLMProviderID: String, Codable, CaseIterable, Identifiable {
+    case volcengineArk = "volcengine_ark"
+    case customOpenAICompatible = "custom_openai_compatible"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .volcengineArk:
+            return "豆包 / 火山方舟"
+        case .customOpenAICompatible:
+            return "自定义 OpenAI-compatible"
+        }
+    }
 }
 
 enum HotkeyMode: String, Codable, CaseIterable, Identifiable {
@@ -130,11 +196,11 @@ enum AppError: LocalizedError, Equatable {
         case .asrTimeout:
             return "本地识别超时。"
         case .llmAPIKeyMissing:
-            return "未配置豆包 / 火山方舟 API Key。当前将直接插入本地识别结果。"
+            return "未配置当前文本模型 API Key。当前将直接插入本地识别结果。"
         case .llmFailed(let message):
-            return "豆包 / 火山方舟调用失败：\(message)"
+            return "文本模型调用失败：\(message)"
         case .llmTimeout:
-            return "豆包 / 火山方舟调用超时。"
+            return "文本模型调用超时。"
         case .jsonParseFailed(let message):
             return "模型返回内容无法解析：\(message)"
         case .injectionFailed:
@@ -146,4 +212,3 @@ enum AppError: LocalizedError, Equatable {
         }
     }
 }
-

@@ -8,16 +8,19 @@ final class HotKeyManager {
     private var onRelease: ((PipelineMode) -> Void)?
     private var dictationHotkey = HotKeyDefinition.defaultDictation
     private var editSelectionHotkey = HotKeyDefinition.defaultEditSelection
+    private var hotkeyMode: HotkeyMode = .pressToTalk
 
     func start(
         dictationHotkey: String,
         editSelectionHotkey: String,
+        hotkeyMode: HotkeyMode,
         onPress: @escaping (PipelineMode) -> Void,
         onRelease: @escaping (PipelineMode) -> Void
     ) {
         stop()
         self.dictationHotkey = HotKeyDefinition(rawValue: dictationHotkey) ?? .defaultDictation
         self.editSelectionHotkey = HotKeyDefinition(rawValue: editSelectionHotkey) ?? .defaultEditSelection
+        self.hotkeyMode = hotkeyMode
         self.onPress = onPress
         self.onRelease = onRelease
 
@@ -44,13 +47,26 @@ final class HotKeyManager {
         activeMode = nil
     }
 
-    func update(dictationHotkey: String, editSelectionHotkey: String) {
+    func update(dictationHotkey: String, editSelectionHotkey: String, hotkeyMode: HotkeyMode) {
         self.dictationHotkey = HotKeyDefinition(rawValue: dictationHotkey) ?? .defaultDictation
         self.editSelectionHotkey = HotKeyDefinition(rawValue: editSelectionHotkey) ?? .defaultEditSelection
+        self.hotkeyMode = hotkeyMode
     }
 
     private func handle(_ event: NSEvent) {
         guard let mode = mode(for: event) else { return }
+        if hotkeyMode == .toggle {
+            guard event.type == .keyDown, !event.isARepeat else { return }
+            if let activeMode {
+                self.activeMode = nil
+                onRelease?(activeMode)
+            } else {
+                activeMode = mode
+                onPress?(mode)
+            }
+            return
+        }
+
         if event.type == .keyDown, !event.isARepeat {
             if activeMode == nil {
                 activeMode = mode

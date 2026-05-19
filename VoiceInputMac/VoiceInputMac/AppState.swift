@@ -53,7 +53,7 @@ final class AppState: ObservableObject {
         audioRecorder = AudioRecorder()
         asrService = WhisperCliService()
         promptBuilder = PromptBuilder()
-        llmProvider = ArkClient(configProvider: { AppState.shared.config }, keychainStore: keychainStore)
+        llmProvider = OpenAICompatibleClient(configProvider: { AppState.shared.config }, keychainStore: keychainStore)
         pasteboardInjector = PasteboardInjector(restoreClipboard: { AppState.shared.config.restoreClipboardAfterPaste })
         accessibilityInjector = AccessibilityInjector()
         activeAppDetector = ActiveAppDetector()
@@ -65,6 +65,7 @@ final class AppState: ObservableObject {
         hotKeyManager.start(
             dictationHotkey: config.dictationHotkey,
             editSelectionHotkey: config.editSelectionHotkey,
+            hotkeyMode: config.hotkeyMode,
             onPress: { [weak self] mode in
                 Task { @MainActor in self?.beginRecording(mode: mode) }
             },
@@ -80,7 +81,7 @@ final class AppState: ObservableObject {
 
     func loadLocalState() {
         config = settingsStore.loadConfig()
-        apiKeyDraft = (try? keychainStore.getSecret(account: "ark_api_key")) ?? ""
+        loadSelectedAPIKeyDraft()
         do {
             try dictionaryStore.seedDefaultsIfNeeded()
             try styleProfileStore.seedDefaultsIfNeeded()
@@ -95,7 +96,11 @@ final class AppState: ObservableObject {
     func saveConfig() {
         do {
             try settingsStore.saveConfig(config)
-            hotKeyManager.update(dictationHotkey: config.dictationHotkey, editSelectionHotkey: config.editSelectionHotkey)
+            hotKeyManager.update(
+                dictationHotkey: config.dictationHotkey,
+                editSelectionHotkey: config.editSelectionHotkey,
+                hotkeyMode: config.hotkeyMode
+            )
         } catch {
             lastError = error.localizedDescription
         }
@@ -103,11 +108,21 @@ final class AppState: ObservableObject {
 
     func saveAPIKey() {
         do {
-            try keychainStore.setSecret(apiKeyDraft, account: "ark_api_key")
+            try keychainStore.setSecret(apiKeyDraft, account: LLMEndpoint.selected(from: config).keychainAccount)
             message = "API Key saved to Keychain"
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    func selectLLMProvider(_ provider: String) {
+        config.llmProvider = provider
+        saveConfig()
+        loadSelectedAPIKeyDraft()
+    }
+
+    private func loadSelectedAPIKeyDraft() {
+        apiKeyDraft = (try? keychainStore.getSecret(account: LLMEndpoint.selected(from: config).keychainAccount)) ?? ""
     }
 
     func validateASRSetup() {
@@ -128,13 +143,14 @@ final class AppState: ObservableObject {
         Task {
             do {
                 saveAPIKey()
+                let endpoint = LLMEndpoint.selected(from: config)
                 let result = try await llmProvider.complete(
                     systemPrompt: "你是连接测试。只返回 JSON。",
                     userPrompt: #"请返回 {"action":"noop","text":"ok","detected_language":"zh","format":"plain","confidence":1.0,"warnings":[]}"#,
                     options: LLMOptions(
-                        model: config.arkModel,
+                        model: endpoint.model,
                         temperature: 0,
-                        timeoutSeconds: config.arkTimeoutSeconds,
+                        timeoutSeconds: endpoint.timeoutSeconds,
                         responseFormat: "json_object"
                     )
                 )
@@ -162,7 +178,18 @@ final class AppState: ObservableObject {
                 phase = .recording
                 message = mode == .dictation ? "正在录音，松开以输入" : "正在录音编辑指令，松开以替换"
                 DictationOverlayPresenter.shared.show(message: message, phase: phase)
-                try await audioRecorder.startRecording(maxDurationSeconds: config.whisperMaxSegmentSeconds)
+                try await audioRecorder.startRecording(
+                    maxDurationSeconds: config.whisperMaxSegmentSeconds,
+                    enableVAD: config.whisperEnableVAD && config.hotkeyMode == .toggle,
+                    onAutoStop: { [weak self] in
+                        guard let self else { return }
+                        Task { @MainActor in
+                            if self.phase == .recording {
+                                self.finishRecording(mode: mode)
+                            }
+                        }
+                    }
+                )
             } catch {
                 await handle(error)
             }
@@ -268,7 +295,7 @@ final class AppState: ObservableObject {
                 finalText: action.text,
                 action: action.action,
                 context: appContext,
-                model: config.arkModel,
+                model: LLMEndpoint.selected(from: config).model,
                 asrProvider: config.asrProvider,
                 llmProvider: config.llmProvider,
                 latencyMs: latency
@@ -288,8 +315,9 @@ final class AppState: ObservableObject {
         appContext: ActiveAppContext,
         styleProfile: StyleProfile?
     ) async -> LLMAction {
-        guard !apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !config.arkModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let endpoint = LLMEndpoint.selected(from: config)
+        let keyMissing = endpoint.requiresAPIKey && apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard !keyMissing, !endpoint.trimmedModel.isEmpty else {
             lastError = AppError.llmAPIKeyMissing.localizedDescription
             return PipelineFallback.actionWhenLLMUnavailable(
                 mode: mode,
@@ -313,9 +341,9 @@ final class AppState: ObservableObject {
                 systemPrompt: prompt.system,
                 userPrompt: prompt.user,
                 options: LLMOptions(
-                    model: config.arkModel,
-                    temperature: config.arkTemperature,
-                    timeoutSeconds: config.arkTimeoutSeconds,
+                    model: endpoint.model,
+                    temperature: endpoint.temperature,
+                    timeoutSeconds: endpoint.timeoutSeconds,
                     responseFormat: "json_object"
                 )
             )

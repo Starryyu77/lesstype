@@ -5,9 +5,33 @@ struct LLMSettingsView: View {
 
     var body: some View {
         Form {
-            TextField("Provider", text: binding(\.llmProvider))
-            TextField("Base URL", text: binding(\.arkBaseURL))
-            TextField("Model", text: binding(\.arkModel))
+            Picker("Provider", selection: providerBinding) {
+                ForEach(LLMProviderID.allCases) { provider in
+                    Text(provider.title).tag(provider.rawValue)
+                }
+            }
+
+            if selectedProvider == .volcengineArk {
+                Section("豆包 / 火山方舟") {
+                    TextField("Base URL", text: binding(\.arkBaseURL))
+                    TextField("Model", text: binding(\.arkModel))
+                }
+            } else {
+                Section("自定义 OpenAI-compatible API") {
+                    TextField("Base URL", text: binding(\.customLLMBaseURL))
+                    TextField("Path", text: binding(\.customLLMPath))
+                    TextField("Model", text: binding(\.customLLMModel))
+                    Toggle("需要 API Key", isOn: binding(\.customLLMRequiresAPIKey))
+                    TextField("Auth Header", text: binding(\.customLLMAuthHeader))
+                    TextField("Auth Scheme", text: binding(\.customLLMAuthScheme))
+                    TextField("Extra Headers JSON", text: binding(\.customLLMExtraHeadersJSON), axis: .vertical)
+                        .lineLimit(2...4)
+                    Text("你的服务只需要实现 OpenAI-compatible /chat/completions，返回 choices[0].message.content。content 应尽量是本 App 要求的 JSON。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             SecureField("API Key", text: $appState.apiKeyDraft)
             HStack {
                 Text("Temperature")
@@ -37,6 +61,17 @@ struct LLMSettingsView: View {
             }
         }
         .padding()
+    }
+
+    private var selectedProvider: LLMProviderID {
+        LLMProviderID(rawValue: appState.config.llmProvider) ?? .volcengineArk
+    }
+
+    private var providerBinding: Binding<String> {
+        Binding(
+            get: { appState.config.llmProvider },
+            set: { appState.selectLLMProvider($0) }
+        )
     }
 
     private func binding<Value>(_ keyPath: WritableKeyPath<AppConfig, Value>) -> Binding<Value> {

@@ -8,6 +8,7 @@
 - `Option+Space` 按住录音，松开后本地 ASR、LLM 润色并插入当前输入框。
 - 默认音频不上云，第一版使用 whisper.cpp CLI 在本地识别。
 - 只把识别后的文本发送到豆包 / 火山方舟 OpenAI-compatible API 做润色。
+- 也支持接入你自己的 OpenAI-compatible 文本 LLM API。
 - API Key 存入 macOS Keychain。
 - 历史、词典、风格配置保存在本地 SQLite。
 
@@ -29,6 +30,7 @@ open dist/VoiceInputMac.app
 ```
 
 详细说明见 [`VoiceInputMac/README.md`](VoiceInputMac/README.md)。
+自定义 API 接口见 [`VoiceInputMac/Docs/API_PROVIDER_INTERFACE.md`](VoiceInputMac/Docs/API_PROVIDER_INTERFACE.md)。
 
 ## 隐私边界
 

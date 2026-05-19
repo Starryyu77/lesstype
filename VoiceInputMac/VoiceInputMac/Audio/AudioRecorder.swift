@@ -10,13 +10,27 @@ final class AudioRecorder: ObservableObject {
     private var converter: AVAudioConverter?
     private var isRecording = false
     private var stopWorkItem: DispatchWorkItem?
+    private var enableVAD = false
+    private var vadDetector = VADDetector()
+    private var didHearSpeech = false
+    private var silenceStartedAt: Date?
+    private var didRequestAutoStop = false
+    private var recordingStartedAt: Date?
+    private var onAutoStop: (() -> Void)?
 
-    func startRecording(maxDurationSeconds: Int) async throws {
+    func startRecording(maxDurationSeconds: Int, enableVAD: Bool = false, onAutoStop: (() -> Void)? = nil) async throws {
         guard !isRecording else { return }
         let granted = await requestMicrophonePermission()
         guard granted else {
             throw AppError.microphonePermissionDenied
         }
+
+        self.enableVAD = enableVAD
+        self.onAutoStop = onAutoStop
+        didHearSpeech = false
+        silenceStartedAt = nil
+        didRequestAutoStop = false
+        recordingStartedAt = Date()
 
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
@@ -32,6 +46,7 @@ final class AudioRecorder: ObservableObject {
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { [weak self] buffer, _ in
             self?.write(buffer: buffer, inputFormat: inputFormat, targetFormat: targetFormat)
+            self?.checkVAD(buffer: buffer)
         }
 
         engine.prepare()
@@ -57,6 +72,7 @@ final class AudioRecorder: ObservableObject {
         isRecording = false
         outputFile = nil
         converter = nil
+        onAutoStop = nil
         guard let url = outputURL else {
             throw AppError.asrFailed("Recording output was not created")
         }
@@ -84,6 +100,31 @@ final class AudioRecorder: ObservableObject {
         }
         if error == nil, converted.frameLength > 0 {
             try? outputFile.write(from: converted)
+        }
+    }
+
+    private func checkVAD(buffer: AVAudioPCMBuffer) {
+        guard enableVAD, !didRequestAutoStop else { return }
+        let elapsed = Date().timeIntervalSince(recordingStartedAt ?? Date())
+        guard elapsed > 0.8 else { return }
+
+        let silent = vadDetector.isSilent(buffer: buffer)
+        if !silent {
+            didHearSpeech = true
+            silenceStartedAt = nil
+            return
+        }
+
+        guard didHearSpeech else { return }
+        if silenceStartedAt == nil {
+            silenceStartedAt = Date()
+        }
+        if let silenceStartedAt,
+           Date().timeIntervalSince(silenceStartedAt) >= vadDetector.requiredSilenceSeconds {
+            didRequestAutoStop = true
+            DispatchQueue.main.async { [weak self] in
+                self?.onAutoStop?()
+            }
         }
     }
 
@@ -118,4 +159,3 @@ final class AudioRecorder: ObservableObject {
         }
     }
 }
-
