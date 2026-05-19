@@ -24,6 +24,13 @@ struct DictionaryNormalizer {
         result = replacing("whisper 点 cpp", with: "whisper.cpp", in: result)
         result = replacing("点 cpp", with: ".cpp", in: result)
         result = replacing("点 C P P", with: ".cpp", in: result)
+        result = replacing("差路", with: "插入", in: result)
+        result = replacing("叉入", with: "插入", in: result)
+        result = replacing("插路", with: "插入", in: result)
+        result = replacing("去进行一个整理", with: "整理", in: result)
+        result = replacing("去进行整理", with: "整理", in: result)
+        result = replacing("进行一个整理", with: "整理", in: result)
+        result = replacing("没有办法去", with: "无法", in: result)
         return result
     }
 
@@ -36,4 +43,3 @@ struct DictionaryNormalizer {
         return regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement)
     }
 }
-

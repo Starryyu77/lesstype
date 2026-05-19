@@ -5,6 +5,6 @@
   {"spoken": "cursor", "written": "Cursor", "aliases": [], "scope": "global", "priority": 8},
   {"spoken": "swift ui", "written": "SwiftUI", "aliases": ["swiftui"], "scope": "global", "priority": 8},
   {"spoken": "whisper", "written": "Whisper", "aliases": ["whisper.cpp"], "scope": "global", "priority": 8},
-  {"spoken": "tailwind", "written": "Tailwind CSS", "aliases": [], "scope": "global", "priority": 8}
+  {"spoken": "tailwind", "written": "Tailwind CSS", "aliases": [], "scope": "global", "priority": 8},
+  {"spoken": "插入", "written": "插入", "aliases": ["差路", "叉入", "插路"], "scope": "global", "priority": 7}
 ]
-

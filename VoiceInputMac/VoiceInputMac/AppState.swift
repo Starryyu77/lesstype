@@ -317,13 +317,13 @@ final class AppState: ObservableObject {
         message = "正在润色文本"
         DictationOverlayPresenter.shared.show(message: message, phase: phase)
 
-        let action = await buildAction(
+        let action = normalizeFinalAction(await buildAction(
             mode: mode,
             rawTranscript: normalizedTranscript,
             selectedText: selectedText,
             appContext: appContext,
             styleProfile: profile
-        )
+        ))
 
         phase = .injecting
         message = "正在插入文本"
@@ -408,6 +408,24 @@ final class AppState: ObservableObject {
                 language: config.whisperLanguage
             )
         }
+    }
+
+    private func normalizeFinalAction(_ action: LLMAction) -> LLMAction {
+        guard action.action == "insert" || action.action == "replace_selection" else {
+            return action
+        }
+        let normalizedText = normalizer.normalize(action.text, entries: dictionaryEntries)
+        guard normalizedText != action.text else {
+            return action
+        }
+        return LLMAction(
+            action: action.action,
+            text: normalizedText,
+            detected_language: action.detected_language,
+            format: action.format,
+            confidence: action.confidence,
+            warnings: action.warnings
+        )
     }
 
     private func perform(action: LLMAction, targetContext: ActiveAppContext) async throws {

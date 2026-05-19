@@ -87,3 +87,13 @@
 - 根因二：录音浮窗文案仍写“松开以输入”。已根据 `hotkeyMode` 显示“再按一次以输入 / 再按一次以替换”。
 - 插入增强：`PasteboardInjector` 会先通过 Accessibility 找目标 App 菜单中的 Paste/粘贴/貼上 项并执行 AXPress；找不到或失败才 fallback 到 CGEvent Cmd+V。对部分 App，会先打开 Edit/编辑/編輯 菜单再查找 Paste。
 - 验证：`swift test` 21 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 使用 Apple Development 成功签名；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；本机运行 PID：95915。
+
+## 2026-05-19 润色强度与同音误识别修复
+
+- 用户反馈：“差路”应为“插入”，且 App 对口语内容的整理不够主动。
+- 新增默认词典与迁移：`插入` written 形式，aliases=`差路/叉入/插路`；已有数据库会补齐缺失默认项。本机 SQLite 已确认写入 id=8。
+- `DictionaryNormalizer` 新增后处理：纠正 `差路/叉入/插路 -> 插入`，并压缩 `去进行一个整理/进行一个整理 -> 整理`、`没有办法去 -> 无法` 等拖沓口语结构。
+- LLM 返回后，`AppState` 会对 `insert` / `replace_selection` 的最终文本再跑一次词典和口语后处理，避免模型漏改。
+- `polish.zh.md` prompt 加强：要求主动轻度书面化整理、修正明显同音错字、删除“这个/进行一个/还有一个问题就是”等拖沓结构，并加入 “差路 -> 插入” 的示例。
+- 剪贴板恢复等待从 700ms 提高到 1500ms，降低 Electron/异步读取剪贴板的 App 粘贴失败概率。
+- 验证：`swift test` 22 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：3089。

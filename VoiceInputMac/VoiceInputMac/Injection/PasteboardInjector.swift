@@ -33,7 +33,7 @@ final class PasteboardInjector: TextInjector {
             throw AppError.injectionFailed("Unable to trigger Paste")
         }
 
-        try await Task.sleep(nanoseconds: 700_000_000)
+        try await Task.sleep(nanoseconds: 1_500_000_000)
         if restoreClipboard() {
             snapshot.restore(to: pasteboard)
         }

@@ -9,5 +9,13 @@ final class DictionaryTests: XCTestCase {
         XCTAssertTrue(normalized.contains("SwiftUI"))
         XCTAssertTrue(normalized.contains("whisper.cpp"))
     }
-}
 
+    func testDictionaryNormalizerFixesDictationHomophonesAndSpokenPhrases() {
+        let raw = "这个差路依然不太正常还有一个问题就是他好像没有办法去对我们说的话进行一个整理"
+        let normalized = DictionaryNormalizer().normalize(raw, entries: DictionaryStore.defaultEntries)
+        XCTAssertTrue(normalized.contains("插入"))
+        XCTAssertFalse(normalized.contains("差路"))
+        XCTAssertFalse(normalized.contains("进行一个整理"))
+        XCTAssertTrue(normalized.contains("无法"))
+    }
+}

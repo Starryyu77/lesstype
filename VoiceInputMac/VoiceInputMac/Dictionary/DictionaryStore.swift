@@ -11,8 +11,14 @@ final class DictionaryStore {
 
     func seedDefaultsIfNeeded() throws {
         let count = try database.query("SELECT COUNT(*) AS count FROM dictionary_entries").first?["count"] ?? "0"
-        guard count == "0" else { return }
-        for entry in Self.defaultEntries {
+        if count == "0" {
+            for entry in Self.defaultEntries {
+                try insert(entry)
+            }
+            return
+        }
+
+        for entry in Self.defaultEntries where try isMissingDefault(entry) {
             try insert(entry)
         }
     }
@@ -59,6 +65,14 @@ final class DictionaryStore {
         try database.execute("DELETE FROM dictionary_entries WHERE id = ?", bindings: [String(id)])
     }
 
+    private func isMissingDefault(_ entry: DictionaryEntry) throws -> Bool {
+        let rows = try database.query(
+            "SELECT id FROM dictionary_entries WHERE spoken = ? OR written = ? LIMIT 1",
+            bindings: [entry.spoken, entry.written]
+        )
+        return rows.isEmpty
+    }
+
     private func encodeAliases(_ aliases: [String]) throws -> String {
         let data = try encoder.encode(aliases)
         return String(data: data, encoding: .utf8) ?? "[]"
@@ -79,7 +93,7 @@ final class DictionaryStore {
         DictionaryEntry(id: nil, spoken: "cursor", written: "Cursor", aliases: [], scope: "global", priority: 8),
         DictionaryEntry(id: nil, spoken: "swift ui", written: "SwiftUI", aliases: ["swiftui"], scope: "global", priority: 8),
         DictionaryEntry(id: nil, spoken: "whisper", written: "Whisper", aliases: ["whisper.cpp"], scope: "global", priority: 8),
-        DictionaryEntry(id: nil, spoken: "tailwind", written: "Tailwind CSS", aliases: [], scope: "global", priority: 8)
+        DictionaryEntry(id: nil, spoken: "tailwind", written: "Tailwind CSS", aliases: [], scope: "global", priority: 8),
+        DictionaryEntry(id: nil, spoken: "插入", written: "插入", aliases: ["差路", "叉入", "插路"], scope: "global", priority: 7)
     ]
 }
-
