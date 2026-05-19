@@ -27,7 +27,6 @@ final class CGEventTyper {
         }
         units.withUnsafeBufferPointer { buffer in
             down.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: buffer.baseAddress)
-            up.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: buffer.baseAddress)
         }
         down.post(tap: .cghidEventTap)
         usleep(2_000)

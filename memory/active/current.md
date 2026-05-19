@@ -126,3 +126,10 @@
 - 权限页新增“请求辅助功能权限”按钮；辅助功能错误文案改为说明“关闭再打开/删除重加 dist/VoiceInputMac.app/重启 App”的恢复动作。
 - 已执行 `tccutil reset Accessibility local.voiceinputmac.app`，只重置 VoiceInputMac 这一条辅助功能记录；随后重启 App 并打开辅助功能设置页，等待用户重新启用当前构建。
 - 验证：`swift test` 27 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：48928。
+
+## 2026-05-19 重复插入修复
+
+- 用户反馈：辅助功能重新绑定后可以插入，但一次插入多遍。
+- 修复 `CGEventTyper`：Unicode 文本只放在 keyDown 事件，keyUp 不再携带同一段文本，避免部分目标 App 同时消费 keyDown/keyUp 导致重复插入。
+- `AppState` 增加 `isPipelineRunning` 防重入锁，避免同一次录音结果被重复执行 pipeline/插入。
+- 验证：`swift test` 27 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：53712。

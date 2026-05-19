@@ -42,6 +42,7 @@ final class AppState: ObservableObject {
     private var selectedTextAtRecordingStart: String = ""
     private var appContextAtRecordingStart: ActiveAppContext?
     private var recordingStartedAt: Date?
+    private var isPipelineRunning = false
 
     private init() {
         do {
@@ -200,7 +201,7 @@ final class AppState: ObservableObject {
     }
 
     func beginRecording(mode: PipelineMode) {
-        guard phase == .idle || phase == .done || phase == .error else { return }
+        guard !isPipelineRunning, phase == .idle || phase == .done || phase == .error else { return }
         activeRecordingMode = mode
         selectedTextAtRecordingStart = ""
         appContextAtRecordingStart = activeAppDetector.currentContext()
@@ -246,12 +247,14 @@ final class AppState: ObservableObject {
     }
 
     func finishRecording(mode: PipelineMode) {
-        guard activeRecordingMode == mode || activeRecordingMode == nil else { return }
+        guard !isPipelineRunning, activeRecordingMode == mode || activeRecordingMode == nil else { return }
+        isPipelineRunning = true
         Task {
             do {
                 let audioURL = try audioRecorder.stopRecording()
                 try await runPipeline(audioURL: audioURL, mode: mode)
             } catch {
+                isPipelineRunning = false
                 await handle(error)
             }
         }
@@ -278,6 +281,7 @@ final class AppState: ObservableObject {
             activeRecordingMode = nil
             appContextAtRecordingStart = nil
             recordingStartedAt = nil
+            isPipelineRunning = false
             if !config.saveAudio {
                 try? FileManager.default.removeItem(at: audioURL)
             }
