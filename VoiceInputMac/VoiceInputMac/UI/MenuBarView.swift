@@ -67,7 +67,6 @@ struct MenuBarView: View {
     }
 
     private func openSettingsWindow() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
+        SettingsWindowPresenter.shared.show(appState: appState)
     }
 }

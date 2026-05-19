@@ -22,6 +22,7 @@ struct VoiceInputApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppState.shared.start()
+        SettingsWindowPresenter.shared.show(appState: AppState.shared)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
