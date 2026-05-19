@@ -68,3 +68,6 @@
 - `scripts/build_app.sh` 已改成自动优先选择本机 Keychain 里的 `Apple Development` 代码签名身份；没有时再尝试 `Developer ID Application`；都没有时才退回 ad-hoc `-`。
 - README 已补充本机开发签名路径：在 Xcode 登录 Apple ID，Manage Certificates 创建 `Apple Development`，用 `security find-identity -v -p codesigning` 确认，然后直接运行 `bash scripts/build_app.sh debug`。
 - 当前机器仍无有效身份，脚本验证会输出 ad-hoc fallback 提示；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过。
+- 后续实机修复：Xcode 已创建 `Apple Development: 1873964133@qq.com (959UL4UP8J)`，但本机缺 Apple WWDR G3 中间证书，导致 `codesign` 报 `unable to build chain to self-signed root` / `errSecInternalComponent`，且 `security find-identity` 显示 0。
+- 已从 Apple 官方 PKI 下载并导入 `AppleWWDRCAG3.cer` 到 login Keychain；之后 `security find-identity -v -p codesigning` 显示 1 个有效身份。
+- 当前 `dist/VoiceInputMac.app` 已用 Apple Development 成功签名：`Authority=Apple Development: 1873964133@qq.com (959UL4UP8J)`，`TeamIdentifier=M58A5P2USR`；签名校验通过；本机运行 PID：83575。
