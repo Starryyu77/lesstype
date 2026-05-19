@@ -146,3 +146,5 @@
 - 用户反馈录制仍不行。定位为隐藏 `NSView` 不稳定拿到 first responder，且录制期间只是忽略旧全局热键，Carbon 注册仍可能吞掉事件。
 - 修复：热键录制改用设置窗口 `NSEvent.addLocalMonitorForEvents(.keyDown)`；开始录制时 `hotKeyManager.stop()` 完全注销旧全局热键，录制完成/取消后重新 `startHotKeyManager()` 注册；不再依赖隐藏 first-responder view。
 - 验证：`swift test` 29 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：73008。
+- 用户继续反馈：Command 组合能用，但 Fn/Control/Option 不稳。修复：录制期间同时挂 local + global keyDown monitor；`HotKeyDefinition` 统一用 `.deviceIndependentFlagsMask` 标准化 modifier，避免 numericPad/系统附带 flag 干扰 Control/Option/Fn 识别。
+- 验证：`swift test` 30 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：77658。

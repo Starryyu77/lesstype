@@ -140,7 +140,7 @@ struct HotKeyDefinition: Equatable {
 
     init(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
         self.keyCode = keyCode
-        self.modifiers = modifiers.intersection(Self.matchableModifiers)
+        self.modifiers = Self.normalizedModifiers(from: modifiers)
     }
 
     init?(rawValue: String) {
@@ -173,13 +173,13 @@ struct HotKeyDefinition: Equatable {
 
     static func from(event: NSEvent) -> HotKeyDefinition? {
         guard event.type == .keyDown, !event.isARepeat else { return nil }
-        let modifiers = event.modifierFlags.intersection(Self.matchableModifiers)
+        let modifiers = normalizedModifiers(from: event.modifierFlags)
         guard !modifiers.isEmpty else { return nil }
         return HotKeyDefinition(keyCode: event.keyCode, modifiers: modifiers)
     }
 
     func matches(_ event: NSEvent) -> Bool {
-        let eventModifiers = event.modifierFlags.intersection(Self.matchableModifiers)
+        let eventModifiers = Self.normalizedModifiers(from: event.modifierFlags)
         return event.keyCode == keyCode &&
             eventModifiers == modifiers
     }
@@ -218,7 +218,7 @@ struct HotKeyDefinition: Equatable {
     }
 
     static func describe(_ event: NSEvent) -> String {
-        let flags = event.modifierFlags.intersection(matchableModifiers)
+        let flags = normalizedModifiers(from: event.modifierFlags)
         let parts: [String] = [
             flags.contains(.function) ? "Fn" : nil,
             flags.contains(.control) ? "Control" : nil,
@@ -228,6 +228,12 @@ struct HotKeyDefinition: Equatable {
             keyName(for: event.keyCode)
         ].compactMap { $0 }
         return "\(event.type == .keyDown ? "keyDown" : "keyUp") keyCode=\(event.keyCode) flags=\(parts.joined(separator: "+"))"
+    }
+
+    private static func normalizedModifiers(from flags: NSEvent.ModifierFlags) -> NSEvent.ModifierFlags {
+        flags
+            .intersection(.deviceIndependentFlagsMask)
+            .intersection(matchableModifiers)
     }
 
     private static func keyCode(for key: String) -> UInt16? {

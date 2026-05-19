@@ -45,7 +45,7 @@ final class HotKeyTests: XCTestCase {
         let event = NSEvent.keyEvent(
             with: .keyDown,
             location: .zero,
-            modifierFlags: [.control, .option],
+            modifierFlags: [.control, .option, .numericPad],
             timestamp: 0,
             windowNumber: 0,
             context: nil,
@@ -60,6 +60,24 @@ final class HotKeyTests: XCTestCase {
             HotKeyDefinition(keyCode: 0, modifiers: [.control, .option])
         )
         XCTAssertEqual(event.flatMap(HotKeyDefinition.from(event:))?.displayName, "Control+Option+A")
+    }
+
+    func testMatchesControlOptionEventWithExtraFlags() {
+        let event = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.control, .option, .numericPad],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "a",
+            charactersIgnoringModifiers: "a",
+            isARepeat: false,
+            keyCode: 0
+        )
+
+        XCTAssertEqual(event.flatMap(HotKeyDefinition.from(event:))?.displayName, "Control+Option+A")
+        XCTAssertEqual(HotKeyDefinition(rawValue: "Control+Option+A")?.matches(event!), true)
     }
 
     func testParsesFunctionDigitAndRawKeyNames() {

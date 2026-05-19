@@ -153,24 +153,38 @@ private struct HotkeyRecorderRow: View {
 
 @MainActor
 private final class HotkeyCaptureMonitor: ObservableObject {
-    private var monitor: Any?
+    private var monitors: [Any] = []
+    private var isActive = false
 
     func start(mode: PipelineMode, appState: AppState, onFinish: @escaping () -> Void) {
         stop(appState: nil)
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak appState] event in
+        isActive = true
+        if let local = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self, weak appState] event in
             Task { @MainActor in
                 guard let self, let appState else { return }
                 self.handle(event, mode: mode, appState: appState, onFinish: onFinish)
             }
             return nil
+        }) {
+            monitors.append(local)
+        }
+
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self, weak appState] event in
+            Task { @MainActor in
+                guard let self, let appState else { return }
+                self.handle(event, mode: mode, appState: appState, onFinish: onFinish)
+            }
+        }) {
+            monitors.append(global)
         }
     }
 
     func stop(appState: AppState?) {
-        if let monitor {
+        isActive = false
+        for monitor in monitors {
             NSEvent.removeMonitor(monitor)
         }
-        monitor = nil
+        monitors.removeAll()
         appState?.setHotkeyCaptureActive(false)
     }
 
@@ -180,6 +194,7 @@ private final class HotkeyCaptureMonitor: ObservableObject {
         appState: AppState,
         onFinish: () -> Void
     ) {
+        guard isActive else { return }
         if event.keyCode == 53 {
             stop(appState: appState)
             appState.hotkeySettingsMessage = "已取消录制。"
@@ -198,7 +213,7 @@ private final class HotkeyCaptureMonitor: ObservableObject {
     }
 
     deinit {
-        if let monitor {
+        for monitor in monitors {
             NSEvent.removeMonitor(monitor)
         }
     }
