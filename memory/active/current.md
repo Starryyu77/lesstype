@@ -71,3 +71,11 @@
 - 后续实机修复：Xcode 已创建 `Apple Development: 1873964133@qq.com (959UL4UP8J)`，但本机缺 Apple WWDR G3 中间证书，导致 `codesign` 报 `unable to build chain to self-signed root` / `errSecInternalComponent`，且 `security find-identity` 显示 0。
 - 已从 Apple 官方 PKI 下载并导入 `AppleWWDRCAG3.cer` 到 login Keychain；之后 `security find-identity -v -p codesigning` 显示 1 个有效身份。
 - 当前 `dist/VoiceInputMac.app` 已用 Apple Development 成功签名：`Authority=Apple Development: 1873964133@qq.com (959UL4UP8J)`，`TeamIdentifier=M58A5P2USR`；签名校验通过；本机运行 PID：83575。
+
+## 2026-05-19 Keychain 润色前密码弹窗修复
+
+- 用户反馈：录音结束、进入润色阶段前会要求输入密码。定位为每次 LLM 调用前 `OpenAICompatibleClient` 都读取 Keychain 中的 `custom_llm_api_key`，旧 ad-hoc 签名创建的 Keychain item 会触发访问确认。
+- 修复：`OpenAICompatibleClient` 优先使用 `AppState.apiKeyDraft` 中的内存 API Key，不再每次润色前读取 Keychain；Keychain 只用于启动/设置页加载与保存。
+- 修复：`KeychainStore.setSecret` 改成 delete + add，保存 API Key 时会重建 item，避免继承旧签名时期的访问控制。
+- 修复：`loadSelectedAPIKeyDraft` 在成功读取非空 API Key 后会用当前 Apple Development 签名重写一次 Keychain item，迁移旧 ACL。
+- 验证：`swift test` 21 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 使用 `Apple Development: 1873964133@qq.com (959UL4UP8J)` 成功签名；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；本机运行 PID：88466。

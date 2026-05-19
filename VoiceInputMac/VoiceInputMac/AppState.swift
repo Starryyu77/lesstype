@@ -55,7 +55,11 @@ final class AppState: ObservableObject {
         audioRecorder = AudioRecorder()
         asrService = WhisperCliService()
         promptBuilder = PromptBuilder()
-        llmProvider = OpenAICompatibleClient(configProvider: { AppState.shared.config }, keychainStore: keychainStore)
+        llmProvider = OpenAICompatibleClient(
+            configProvider: { AppState.shared.config },
+            keychainStore: keychainStore,
+            apiKeyProvider: { AppState.shared.apiKeyDraft }
+        )
         pasteboardInjector = PasteboardInjector(restoreClipboard: { AppState.shared.config.restoreClipboardAfterPaste })
         accessibilityInjector = AccessibilityInjector()
         activeAppDetector = ActiveAppDetector()
@@ -147,7 +151,11 @@ final class AppState: ObservableObject {
     }
 
     private func loadSelectedAPIKeyDraft() {
-        apiKeyDraft = (try? keychainStore.getSecret(account: LLMEndpoint.selected(from: config).keychainAccount)) ?? ""
+        let account = LLMEndpoint.selected(from: config).keychainAccount
+        apiKeyDraft = (try? keychainStore.getSecret(account: account)) ?? ""
+        if !apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            try? keychainStore.setSecret(apiKeyDraft, account: account)
+        }
     }
 
     func validateASRSetup() {

@@ -15,20 +15,18 @@ final class KeychainStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        let attributes: [String: Any] = [
-            kSecValueData as String: data
-        ]
 
-        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        if status == errSecItemNotFound {
-            var addQuery = query
-            addQuery[kSecValueData as String] = data
-            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-            guard addStatus == errSecSuccess else {
-                throw AppError.llmFailed("Keychain save failed: \(addStatus)")
-            }
-        } else if status != errSecSuccess {
-            throw AppError.llmFailed("Keychain update failed: \(status)")
+        let deleteStatus = SecItemDelete(query as CFDictionary)
+        guard deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound else {
+            throw AppError.llmFailed("Keychain replace failed: \(deleteStatus)")
+        }
+
+        var addQuery = query
+        addQuery[kSecValueData as String] = data
+        addQuery[kSecAttrLabel as String] = "VoiceInputMac API Key"
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw AppError.llmFailed("Keychain save failed: \(addStatus)")
         }
     }
 
@@ -52,4 +50,3 @@ final class KeychainStore {
         return String(data: data, encoding: .utf8)
     }
 }
-

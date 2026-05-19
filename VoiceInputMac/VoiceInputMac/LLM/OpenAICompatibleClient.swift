@@ -3,11 +3,18 @@ import Foundation
 final class OpenAICompatibleClient: LLMProvider {
     private let configProvider: () -> AppConfig
     private let keychainStore: KeychainStore
+    private let apiKeyProvider: (() throws -> String?)?
     private let session: URLSession
 
-    init(configProvider: @escaping () -> AppConfig, keychainStore: KeychainStore, session: URLSession = .shared) {
+    init(
+        configProvider: @escaping () -> AppConfig,
+        keychainStore: KeychainStore,
+        apiKeyProvider: (() throws -> String?)? = nil,
+        session: URLSession = .shared
+    ) {
         self.configProvider = configProvider
         self.keychainStore = keychainStore
+        self.apiKeyProvider = apiKeyProvider
         self.session = session
     }
 
@@ -20,7 +27,7 @@ final class OpenAICompatibleClient: LLMProvider {
             throw AppError.llmFailed("\(endpoint.displayName) model is empty")
         }
 
-        let apiKey = try keychainStore.getSecret(account: endpoint.keychainAccount) ?? ""
+        let apiKey = try loadAPIKey(for: endpoint)
         if endpoint.requiresAPIKey && apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw AppError.llmAPIKeyMissing
         }
@@ -49,6 +56,13 @@ final class OpenAICompatibleClient: LLMProvider {
             }
         }
         throw lastError ?? AppError.llmFailed("Unknown \(endpoint.displayName) error")
+    }
+
+    private func loadAPIKey(for endpoint: LLMEndpoint) throws -> String {
+        if let apiKey = try apiKeyProvider?() {
+            return apiKey
+        }
+        return try keychainStore.getSecret(account: endpoint.keychainAccount) ?? ""
     }
 
     private func requestCompletion(
