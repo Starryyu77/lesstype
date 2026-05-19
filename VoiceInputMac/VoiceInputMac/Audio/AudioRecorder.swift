@@ -53,7 +53,12 @@ final class AudioRecorder: ObservableObject {
         isRecording = true
 
         let item = DispatchWorkItem { [weak self] in
-            _ = try? self?.stopRecording()
+            guard let self else { return }
+            if self.isRecording {
+                DispatchQueue.main.async {
+                    self.onAutoStop?()
+                }
+            }
         }
         stopWorkItem = item
         DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(maxDurationSeconds), execute: item)

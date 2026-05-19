@@ -210,11 +210,11 @@ final class AppState: ObservableObject {
         Task {
             do {
                 phase = .recording
-                message = mode == .dictation ? "正在录音，松开以输入" : "正在录音编辑指令，松开以替换"
+                message = recordingMessage(for: mode)
                 DictationOverlayPresenter.shared.show(message: message, phase: phase)
                 try await audioRecorder.startRecording(
                     maxDurationSeconds: config.whisperMaxSegmentSeconds,
-                    enableVAD: config.whisperEnableVAD && config.hotkeyMode == .toggle,
+                    enableVAD: false,
                     onAutoStop: { [weak self] in
                         guard let self else { return }
                         Task { @MainActor in
@@ -228,6 +228,13 @@ final class AppState: ObservableObject {
                 await handle(error)
             }
         }
+    }
+
+    private func recordingMessage(for mode: PipelineMode) -> String {
+        if config.hotkeyMode == .toggle {
+            return mode == .dictation ? "正在录音，再按一次以输入" : "正在录音编辑指令，再按一次以替换"
+        }
+        return mode == .dictation ? "正在录音，松开以输入" : "正在录音编辑指令，松开以替换"
     }
 
     func finishRecording(mode: PipelineMode) {

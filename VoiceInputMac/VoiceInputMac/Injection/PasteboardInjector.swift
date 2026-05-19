@@ -26,11 +26,11 @@ final class PasteboardInjector: TextInjector {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
 
-        guard postCommandV() else {
+        guard performMenuPaste() || postCommandV() else {
             if restoreClipboard() {
                 snapshot.restore(to: pasteboard)
             }
-            throw AppError.injectionFailed("Unable to post Cmd+V event")
+            throw AppError.injectionFailed("Unable to trigger Paste")
         }
 
         try await Task.sleep(nanoseconds: 700_000_000)
@@ -52,6 +52,117 @@ final class PasteboardInjector: TextInjector {
         usleep(20_000)
         up.post(tap: .cghidEventTap)
         return true
+    }
+
+    private func performMenuPaste() -> Bool {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return false }
+        let appElement = AXUIElementCreateApplication(app.processIdentifier)
+        var menuBarRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(appElement, kAXMenuBarAttribute as CFString, &menuBarRef) == .success,
+              let menuBar = menuBarRef else {
+            return false
+        }
+        let menuBarElement = menuBar as! AXUIElement
+        let pasteItem = findPasteMenuItem(in: menuBarElement) ?? findPasteMenuItemAfterOpeningEditMenu(in: menuBarElement)
+        guard let pasteItem else {
+            return false
+        }
+        return AXUIElementPerformAction(pasteItem, kAXPressAction as CFString) == .success
+    }
+
+    private func findPasteMenuItemAfterOpeningEditMenu(in menuBar: AXUIElement) -> AXUIElement? {
+        guard let editMenu = findEditMenu(in: menuBar),
+              AXUIElementPerformAction(editMenu, kAXPressAction as CFString) == .success else {
+            return nil
+        }
+        usleep(80_000)
+        return findPasteMenuItem(in: editMenu) ?? findPasteMenuItem(in: menuBar)
+    }
+
+    private func findEditMenu(in element: AXUIElement) -> AXUIElement? {
+        if isEditMenu(element) {
+            return element
+        }
+
+        var childrenRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+              let children = childrenRef as? [AXUIElement] else {
+            return nil
+        }
+        for child in children {
+            if let match = findEditMenu(in: child) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    private func isEditMenu(_ element: AXUIElement) -> Bool {
+        var roleRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef) == .success,
+              let role = roleRef as? String,
+              role == kAXMenuBarItemRole else {
+            return false
+        }
+        let title = stringAttribute(kAXTitleAttribute, from: element)
+        return title == "Edit" || title == "编辑" || title == "編輯"
+    }
+
+    private func findPasteMenuItem(in element: AXUIElement) -> AXUIElement? {
+        if isPasteMenuItem(element) {
+            return element
+        }
+
+        var childrenRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+              let children = childrenRef as? [AXUIElement] else {
+            return nil
+        }
+        for child in children {
+            if let match = findPasteMenuItem(in: child) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    private func isPasteMenuItem(_ element: AXUIElement) -> Bool {
+        var roleRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef) == .success,
+              let role = roleRef as? String,
+              role == kAXMenuItemRole else {
+            return false
+        }
+
+        let title = stringAttribute(kAXTitleAttribute, from: element)
+        if isPlainPasteTitle(title) {
+            return true
+        }
+
+        let command = stringAttribute(kAXMenuItemCmdCharAttribute, from: element).lowercased()
+        let modifiers = intAttribute(kAXMenuItemCmdModifiersAttribute, from: element)
+        return command == "v" && modifiers == 0 && !title.localizedCaseInsensitiveContains("style")
+    }
+
+    private func isPlainPasteTitle(_ title: String) -> Bool {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed == "Paste" || trimmed == "粘贴" || trimmed == "貼上"
+    }
+
+    private func stringAttribute(_ attribute: String, from element: AXUIElement) -> String {
+        var valueRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &valueRef) == .success else {
+            return ""
+        }
+        return valueRef as? String ?? ""
+    }
+
+    private func intAttribute(_ attribute: String, from element: AXUIElement) -> Int {
+        var valueRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &valueRef) == .success else {
+            return 0
+        }
+        return valueRef as? Int ?? 0
     }
 }
 

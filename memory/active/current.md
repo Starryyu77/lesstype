@@ -79,3 +79,11 @@
 - 修复：`KeychainStore.setSecret` 改成 delete + add，保存 API Key 时会重建 item，避免继承旧签名时期的访问控制。
 - 修复：`loadSelectedAPIKeyDraft` 在成功读取非空 API Key 后会用当前 Apple Development 签名重写一次 Keychain item，迁移旧 ACL。
 - 验证：`swift test` 21 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 使用 `Apple Development: 1873964133@qq.com (959UL4UP8J)` 成功签名；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；本机运行 PID：88466。
+
+## 2026-05-19 Toggle 与粘贴插入修复
+
+- 用户反馈：目标是按一次开始、再按一次结束，但实际仍像按住说话；且历史里有内容但不能正常自动插入。
+- 根因一：Toggle 模式下仍启用了基础 VAD，持续静音检测会提前结束录音，导致长句被切成短片段。已关闭当前录音链路中的 VAD 自动结束，Toggle 现在必须第二次按键才停止；最大录音时长到达时才自动收尾。
+- 根因二：录音浮窗文案仍写“松开以输入”。已根据 `hotkeyMode` 显示“再按一次以输入 / 再按一次以替换”。
+- 插入增强：`PasteboardInjector` 会先通过 Accessibility 找目标 App 菜单中的 Paste/粘贴/貼上 项并执行 AXPress；找不到或失败才 fallback 到 CGEvent Cmd+V。对部分 App，会先打开 Edit/编辑/編輯 菜单再查找 Paste。
+- 验证：`swift test` 21 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 使用 Apple Development 成功签名；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；本机运行 PID：95915。
