@@ -110,3 +110,11 @@
 - Overlay 增加动画：录音时显示随麦克风音量变化的语音条；本地识别、润色、插入阶段显示对应处理动画。
 - 自动插入 fallback 顺序调整为：Accessibility 直接写入 -> CGEvent Unicode 直接键入 -> Pasteboard/菜单粘贴 -> ResultPanel，避免剪贴板事件“已发送但目标 App 没有真正粘贴”时过早判定成功。
 - 验证：`swift test` 24 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 使用 `Apple Development: 1873964133@qq.com (959UL4UP8J)` 成功签名；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；本机运行 PID：30413。
+
+## 2026-05-19 插入链路继续加固
+
+- 用户测试后反馈插入仍有问题。继续修复 `AccessibilityInjector`：优先使用 `AXValue + AXSelectedTextRange` 按真实光标/选区替换文本，写入后重新读取 `AXValue` 验证，避免 AX API 返回成功但目标输入框没有实际接收时误判成功。
+- `CGEventTyper` 改为按 UTF-16 chunk 发送 Unicode 文本，并在 keyDown/keyUp 和 chunk 之间加入短延迟，降低目标 App 丢字风险。
+- 目标 App 重新激活增强：使用 `.activateIgnoringOtherApps + .activateAllWindows`，等待时间提高到 300ms。
+- 新增 `AccessibilityInjectorTests` 覆盖光标插入、选区替换、非法 range。
+- 验证：`swift test` 27 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：38199。

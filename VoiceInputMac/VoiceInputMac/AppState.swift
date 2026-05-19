@@ -477,8 +477,8 @@ final class AppState: ObservableObject {
               let app = NSRunningApplication(processIdentifier: context.processIdentifier) else {
             return
         }
-        app.activate(options: [.activateIgnoringOtherApps])
-        try? await Task.sleep(nanoseconds: 180_000_000)
+        app.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+        try? await Task.sleep(nanoseconds: 300_000_000)
     }
 
     func clearHistory() {
