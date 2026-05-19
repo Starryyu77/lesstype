@@ -100,3 +100,5 @@
 - 追加修复：用户继续反馈模型只是加标点，没有真正重组句子。`polish.zh.md` 已把默认策略从“轻度书面化整理”升级为“可读文本重写”，要求合并/拆分/调换短句、合并重复判断、整理原因和转折，并加入完整反馈句示例。
 - 新增 `DictationTextPolisher` 本地兜底，专门处理“识别正常但插入/整理不正常”“没有把我说的话重新整理”等高频反馈句，把它们改写为更自然的表达。
 - 验证：`swift test` 23 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：10380。
+- 追加修复：用户澄清“前面说整理正常，后面又说整理不正常”属于后续修正，最终文本应删除前面的旧判断而不是并列矛盾。`polish.zh.md` 新增“后续修正只保留最新判断”规则和示例；`DictationTextPolisher` 新增移除被推翻的“整理正常”判断规则。
+- 验证：`swift test --filter DictationTextPolisherTests` 通过；`swift test` 24 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：17193。

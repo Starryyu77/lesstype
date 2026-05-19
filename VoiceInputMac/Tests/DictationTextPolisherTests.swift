@@ -10,5 +10,17 @@ final class DictationTextPolisherTests: XCTestCase {
         XCTAssertTrue(polished.contains("整理效果也还不够好"))
         XCTAssertTrue(polished.contains("重新组织成更自然的文本"))
         XCTAssertFalse(polished.contains("其实我觉得整理"))
+        XCTAssertFalse(polished.contains("整理应该是正常"))
+    }
+
+    func testRemovesSupersededPositiveJudgementWhenLaterCorrectionDisagrees() {
+        let raw = "我们来测试一下。这次识别和整理应该是正常的，但插入依然不太正常。另外，整理效果也还不够好，它没有真正把我说的话重新组织成更自然的文本。"
+        let polished = DictationTextPolisher().polish(raw)
+
+        XCTAssertTrue(polished.contains("识别看起来是正常的"))
+        XCTAssertTrue(polished.contains("插入依然不太正常"))
+        XCTAssertTrue(polished.contains("整理效果也还不够好"))
+        XCTAssertFalse(polished.contains("整理应该是正常"))
+        XCTAssertFalse(polished.contains("整理看起来是正常"))
     }
 }
