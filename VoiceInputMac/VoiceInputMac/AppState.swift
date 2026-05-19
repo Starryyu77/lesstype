@@ -33,6 +33,7 @@ final class AppState: ObservableObject {
     private let activeAppDetector: ActiveAppDetector
     private let selectedTextReader: SelectedTextReader
     private let normalizer = DictionaryNormalizer()
+    private let textPolisher = DictationTextPolisher()
     private let commandRouter = CommandRouter()
     private let hotKeyManager = HotKeyManager()
 
@@ -289,7 +290,7 @@ final class AppState: ObservableObject {
             cliCommand: config.whisperCLICommand
         )
         let asrResult = try await asrService.transcribe(audioURL: audioURL, options: asrOptions)
-        let normalizedTranscript = normalizer.normalize(asrResult.text, entries: dictionaryEntries)
+        let normalizedTranscript = textPolisher.polish(normalizer.normalize(asrResult.text, entries: dictionaryEntries))
         guard !normalizedTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AppError.emptyTranscript
         }
@@ -414,7 +415,7 @@ final class AppState: ObservableObject {
         guard action.action == "insert" || action.action == "replace_selection" else {
             return action
         }
-        let normalizedText = normalizer.normalize(action.text, entries: dictionaryEntries)
+        let normalizedText = textPolisher.polish(normalizer.normalize(action.text, entries: dictionaryEntries))
         guard normalizedText != action.text else {
             return action
         }

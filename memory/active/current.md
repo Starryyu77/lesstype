@@ -97,3 +97,6 @@
 - `polish.zh.md` prompt 加强：要求主动轻度书面化整理、修正明显同音错字、删除“这个/进行一个/还有一个问题就是”等拖沓结构，并加入 “差路 -> 插入” 的示例。
 - 剪贴板恢复等待从 700ms 提高到 1500ms，降低 Electron/异步读取剪贴板的 App 粘贴失败概率。
 - 验证：`swift test` 22 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：3089。
+- 追加修复：用户继续反馈模型只是加标点，没有真正重组句子。`polish.zh.md` 已把默认策略从“轻度书面化整理”升级为“可读文本重写”，要求合并/拆分/调换短句、合并重复判断、整理原因和转折，并加入完整反馈句示例。
+- 新增 `DictationTextPolisher` 本地兜底，专门处理“识别正常但插入/整理不正常”“没有把我说的话重新整理”等高频反馈句，把它们改写为更自然的表达。
+- 验证：`swift test` 23 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：10380。
