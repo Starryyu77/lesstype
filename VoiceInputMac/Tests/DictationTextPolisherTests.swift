@@ -26,37 +26,12 @@ final class DictationTextPolisherTests: XCTestCase {
         XCTAssertFalse(polished.contains("整理看起来是正常"))
     }
 
-    func testRemovesWhisperTailCorrectionArtifact() {
+    func testPreservesPlaceholderTextWhenUserActuallySaysIt() {
         let raw = "它的时间精度还是有点问题，而且它会在一句话讲完之后，有一个要求后续变更正的这个词会出现。这不奇怪吗？"
         let polished = DictationTextPolisher().polish(raw)
 
         XCTAssertTrue(polished.contains("时间精度还是有点问题"))
         XCTAssertTrue(polished.contains("这不奇怪吗"))
-        XCTAssertFalse(polished.contains("要求后续"))
-        XCTAssertFalse(polished.contains("变更正"))
-    }
-
-    func testRemovesCorrectionArtifactWithFillerWordsAndPrefix() {
-        let raw = "要求后续变更，还是会有这个不该出现的内容在"
-        let polished = DictationTextPolisher().polish(raw)
-
-        XCTAssertEqual(polished, "还是会有这个不该出现的内容在")
-        XCTAssertFalse(polished.contains("要求后续"))
-    }
-
-    func testRemovesCorrectionArtifactWithWhatFiller() {
-        let raw = "它会有一个什么要求后续变更正的这个词出现"
-        let polished = DictationTextPolisher().polish(raw)
-
-        XCTAssertEqual(polished, "它会出现")
-        XCTAssertFalse(polished.contains("要求后续"))
-        XCTAssertFalse(polished.contains("什么"))
-    }
-
-    func testRemovesArtifactFromExistingFocusedTextValue() {
-        let raw = "123123 我们测试一下 要求后续变更"
-        let cleaned = DictationTextPolisher().removeKnownASRArtifacts(in: raw)
-
-        XCTAssertEqual(cleaned, "123123 我们测试一下")
+        XCTAssertTrue(polished.contains("要求后续变更正"))
     }
 }

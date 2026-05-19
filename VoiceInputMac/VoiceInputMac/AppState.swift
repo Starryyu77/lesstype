@@ -495,8 +495,8 @@ final class AppState: ObservableObject {
             return
         }
 
-        if prefersKeyboardInjection(for: targetContext) {
-            try await performKeyboardFirst(action: action, targetContext: targetContext)
+        if prefersPasteboardInjection(for: targetContext) {
+            try await performPasteboardFirst(action: action, targetContext: targetContext)
             return
         }
 
@@ -507,12 +507,10 @@ final class AppState: ObservableObject {
             } else {
                 try await accessibilityInjector.insertText(action.text)
             }
-            cleanFocusedTextArtifacts()
         } catch {
             do {
                 await activateTargetApp(targetContext)
                 try eventTyper.type(action.text)
-                cleanFocusedTextArtifacts()
             } catch {
                 do {
                     await activateTargetApp(targetContext)
@@ -521,7 +519,6 @@ final class AppState: ObservableObject {
                     } else {
                         try await pasteboardInjector.insertText(action.text)
                     }
-                    cleanFocusedTextArtifacts()
                 } catch {
                     let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                     ResultPanelPresenter.shared.show(text: action.text, reason: reason)
@@ -530,20 +527,18 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func performKeyboardFirst(action: LLMAction, targetContext: ActiveAppContext) async throws {
+    private func performPasteboardFirst(action: LLMAction, targetContext: ActiveAppContext) async throws {
         do {
             await activateTargetApp(targetContext)
-            try eventTyper.type(action.text)
-            cleanFocusedTextArtifacts()
+            if action.action == "replace_selection" {
+                try await pasteboardInjector.replaceSelectedText(action.text)
+            } else {
+                try await pasteboardInjector.insertText(action.text)
+            }
         } catch {
             do {
                 await activateTargetApp(targetContext)
-                if action.action == "replace_selection" {
-                    try await pasteboardInjector.replaceSelectedText(action.text)
-                } else {
-                    try await pasteboardInjector.insertText(action.text)
-                }
-                cleanFocusedTextArtifacts()
+                try eventTyper.type(action.text)
             } catch {
                 do {
                     await activateTargetApp(targetContext)
@@ -552,7 +547,6 @@ final class AppState: ObservableObject {
                     } else {
                         try await accessibilityInjector.insertText(action.text)
                     }
-                    cleanFocusedTextArtifacts()
                 } catch {
                     let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                     ResultPanelPresenter.shared.show(text: action.text, reason: reason)
@@ -561,19 +555,13 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func prefersKeyboardInjection(for context: ActiveAppContext) -> Bool {
+    private func prefersPasteboardInjection(for context: ActiveAppContext) -> Bool {
         let bundleID = context.bundleIdentifier.lowercased()
         let appName = context.activeApp.lowercased()
         return bundleID == "com.openai.codex" ||
             bundleID.contains("electron") ||
             appName == "codex" ||
             appName == "chatgpt"
-    }
-
-    private func cleanFocusedTextArtifacts() {
-        accessibilityInjector.cleanFocusedText { [textPolisher] text in
-            textPolisher.removeKnownASRArtifacts(in: text)
-        }
     }
 
     private func activateTargetApp(_ context: ActiveAppContext) async {

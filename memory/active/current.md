@@ -167,3 +167,7 @@
 - 用户反馈：现在输入后没有任何显示，但历史会写入。复查 SQLite 第 39 条显示 pipeline 仍产出 `final_text=这是 Transformer Xr 的模型吗`，目标 App 为 `Codex/com.openai.codex`。判断为 Codex 富文本输入框的 AXValue 写入返回成功但实际未显示，导致 App 不进入 CGEvent/Pasteboard fallback。
 - 修复：`AppState.perform` 为 Codex/ChatGPT/Electron 类目标新增 keyboard-first 策略：跳过 Accessibility 直接写，优先 `CGEventTyper`，失败再 Pasteboard，最后才 AX。
 - 验证：`swift test` 37 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：23295。
+- 用户确认 `要求后续变更` 是 Codex 输入框自身的灰色 placeholder/autocomplete suggestion，而不是 ASR 或 LLM 输出。此前针对该短语的清洗方向错误，可能把 placeholder 当成真实 AXValue 处理。
+- 修复：撤销 `要求后续变更` 类 ASR 文本过滤，`DictationTextPolisher` 不再删除用户实际说出的该短语；相关测试改为确认保留用户实际说出的 placeholder 文本。
+- 修复：移除插入后 focused text 清扫，不再读取并重写目标输入框来删除 placeholder；对 Codex/ChatGPT/Electron 类目标改成 pasteboard-first，失败再 CGEvent，最后才 AX，避免键盘事件接受 autocomplete suggestion。
+- 验证：`swift test` 34 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：29807。

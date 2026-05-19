@@ -11,32 +11,6 @@ final class AccessibilityInjector: TextInjector {
         try await writeText(text, requireSelection: true)
     }
 
-    func cleanFocusedText(_ cleaner: (String) -> String) {
-        guard AccessibilityPermission.isTrusted(prompt: false),
-              let element = try? focusedElement(),
-              let currentValue = stringAttribute(kAXValueAttribute, from: element) else {
-            return
-        }
-
-        let cleanedValue = cleaner(currentValue)
-        guard cleanedValue != currentValue else {
-            return
-        }
-
-        let selectedRange = selectedTextRange(from: element) ?? CFRange(location: cleanedValue.utf16.count, length: 0)
-        guard AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, cleanedValue as CFTypeRef) == .success else {
-            return
-        }
-
-        var caretRange = CFRange(
-            location: min(selectedRange.location, cleanedValue.utf16.count),
-            length: 0
-        )
-        if let caretValue = AXValueCreate(.cfRange, &caretRange) {
-            AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, caretValue)
-        }
-    }
-
     private func writeText(_ text: String, requireSelection: Bool) async throws {
         guard AccessibilityPermission.isTrusted(prompt: true) else {
             throw AppError.accessibilityPermissionDenied
