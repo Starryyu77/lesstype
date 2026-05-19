@@ -12,7 +12,7 @@ final class AccessibilityInjector: TextInjector {
     }
 
     private func writeText(_ text: String, requireSelection: Bool) async throws {
-        guard AXIsProcessTrusted() else {
+        guard AccessibilityPermission.isTrusted(prompt: true) else {
             throw AppError.accessibilityPermissionDenied
         }
 

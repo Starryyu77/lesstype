@@ -70,6 +70,7 @@ final class AppState: ObservableObject {
 
     func start() {
         loadLocalState()
+        _ = AccessibilityPermission.isTrusted(prompt: true)
         hotKeyManager.start(
             dictationHotkey: config.dictationHotkey,
             editSelectionHotkey: config.editSelectionHotkey,

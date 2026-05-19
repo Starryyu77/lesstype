@@ -118,3 +118,11 @@
 - 目标 App 重新激活增强：使用 `.activateIgnoringOtherApps + .activateAllWindows`，等待时间提高到 300ms。
 - 新增 `AccessibilityInjectorTests` 覆盖光标插入、选区替换、非法 range。
 - 验证：`swift test` 27 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：38199。
+
+## 2026-05-19 辅助功能 TCC 重新绑定
+
+- 用户截图显示：系统设置中 VoiceInputMac 辅助功能开关为开启，但 App 结果面板仍提示辅助功能未授权。判断为当前 bundle id 的 TCC 记录与正在运行的签名构建未正确绑定。
+- 新增 `AccessibilityPermission`：统一使用 `AXIsProcessTrustedWithOptions`，在启动和插入/选区读取路径上允许系统弹出辅助功能授权提示。
+- 权限页新增“请求辅助功能权限”按钮；辅助功能错误文案改为说明“关闭再打开/删除重加 dist/VoiceInputMac.app/重启 App”的恢复动作。
+- 已执行 `tccutil reset Accessibility local.voiceinputmac.app`，只重置 VoiceInputMac 这一条辅助功能记录；随后重启 App 并打开辅助功能设置页，等待用户重新启用当前构建。
+- 验证：`swift test` 27 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：48928。

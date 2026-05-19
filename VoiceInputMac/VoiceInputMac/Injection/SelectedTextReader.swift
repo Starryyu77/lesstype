@@ -11,7 +11,7 @@ final class SelectedTextReader {
     }
 
     private func readViaAccessibility() throws -> String {
-        guard AXIsProcessTrusted() else {
+        guard AccessibilityPermission.isTrusted(prompt: true) else {
             throw AppError.accessibilityPermissionDenied
         }
         let system = AXUIElementCreateSystemWide()
@@ -83,4 +83,3 @@ private struct ClipboardSnapshotForSelection {
         }
     }
 }
-

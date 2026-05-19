@@ -197,7 +197,7 @@ enum AppError: LocalizedError, Equatable {
         case .microphonePermissionDenied:
             return "需要麦克风权限才能录音。请在系统设置中允许本 App 使用麦克风。"
         case .accessibilityPermissionDenied:
-            return "需要辅助功能权限才能把文本插入当前 App。请在系统设置 -> 隐私与安全性 -> 辅助功能中允许本 App。"
+            return AccessibilityPermission.recoveryMessage
         case .inputMonitoringPermissionDenied:
             return "需要输入监听权限才能使用全局按住说话快捷键。请在系统设置中允许本 App 监听键盘输入。"
         case .asrModelMissing:

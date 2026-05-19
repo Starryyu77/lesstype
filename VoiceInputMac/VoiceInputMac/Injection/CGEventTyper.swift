@@ -3,7 +3,7 @@ import Foundation
 
 final class CGEventTyper {
     func type(_ text: String) throws {
-        guard AXIsProcessTrusted() else {
+        guard AccessibilityPermission.isTrusted(prompt: true) else {
             throw AppError.accessibilityPermissionDenied
         }
         let units = Array(text.utf16)

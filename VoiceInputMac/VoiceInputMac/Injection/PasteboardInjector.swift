@@ -18,7 +18,7 @@ final class PasteboardInjector: TextInjector {
     }
 
     private func paste(_ text: String) async throws {
-        guard AXIsProcessTrusted() else {
+        guard AccessibilityPermission.isTrusted(prompt: true) else {
             throw AppError.accessibilityPermissionDenied
         }
         let pasteboard = NSPasteboard.general
