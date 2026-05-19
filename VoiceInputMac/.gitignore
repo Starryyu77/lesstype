@@ -3,6 +3,8 @@
 .swiftpm/
 DerivedData/
 dist/
+Models/*.bin
+Models/*.gguf
 *.xcuserdata
 *.xcuserstate
 *.env
