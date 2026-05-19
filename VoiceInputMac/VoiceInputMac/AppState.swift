@@ -502,10 +502,12 @@ final class AppState: ObservableObject {
             } else {
                 try await accessibilityInjector.insertText(action.text)
             }
+            cleanFocusedTextArtifacts()
         } catch {
             do {
                 await activateTargetApp(targetContext)
                 try eventTyper.type(action.text)
+                cleanFocusedTextArtifacts()
             } catch {
                 do {
                     await activateTargetApp(targetContext)
@@ -514,11 +516,18 @@ final class AppState: ObservableObject {
                     } else {
                         try await pasteboardInjector.insertText(action.text)
                     }
+                    cleanFocusedTextArtifacts()
                 } catch {
                     let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                     ResultPanelPresenter.shared.show(text: action.text, reason: reason)
                 }
             }
+        }
+    }
+
+    private func cleanFocusedTextArtifacts() {
+        accessibilityInjector.cleanFocusedText { [textPolisher] text in
+            textPolisher.removeKnownASRArtifacts(in: text)
         }
     }
 

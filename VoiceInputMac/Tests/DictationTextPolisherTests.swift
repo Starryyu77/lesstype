@@ -52,4 +52,11 @@ final class DictationTextPolisherTests: XCTestCase {
         XCTAssertFalse(polished.contains("要求后续"))
         XCTAssertFalse(polished.contains("什么"))
     }
+
+    func testRemovesArtifactFromExistingFocusedTextValue() {
+        let raw = "123123 我们测试一下 要求后续变更"
+        let cleaned = DictationTextPolisher().removeKnownASRArtifacts(in: raw)
+
+        XCTAssertEqual(cleaned, "123123 我们测试一下")
+    }
 }

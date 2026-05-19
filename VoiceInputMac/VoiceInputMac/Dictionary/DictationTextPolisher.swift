@@ -5,7 +5,7 @@ struct DictationTextPolisher {
         var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !result.isEmpty else { return result }
 
-        result = removeASRTailArtifacts(in: result)
+        result = removeKnownASRArtifacts(in: result)
         result = result.replacingOccurrences(of: "其实我觉得整理其实也不太正常", with: "整理其实也不太正常")
         result = result.replacingOccurrences(of: "其实我觉得整理也不太正常", with: "整理也不太正常")
         result = removeSupersededPositiveJudgement(
@@ -18,7 +18,7 @@ struct DictationTextPolisher {
         return result
     }
 
-    private func removeASRTailArtifacts(in text: String) -> String {
+    func removeKnownASRArtifacts(in text: String) -> String {
         var result = text
         let patterns = [
             #"(?:(?:有)?一个(?:什么)?|什么)?\s*要\s*求\s*后\s*续\s*(?:变\s*更\s*正|变\s*更|更\s*正|更\s*改|修\s*改)(?:\s*的?\s*(?:这个|那个)?\s*词)?"#,

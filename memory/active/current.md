@@ -160,3 +160,7 @@
 - 修复：ASR 尾部噪声过滤扩展为支持 `有一个什么...这个词`、繁体 `要求後續...`、空格拆字、`更改/修改` 等变体；清理残留的 `什么出现/这个词出现`。
 - 修复：`normalizeFinalAction` 现在对 `show_panel` 也执行词典与文本清洗，避免自动插入失败或低置信度展示时仍带出噪声。
 - 验证：`swift test` 36 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：12221。
+- 用户截图显示输入框仍出现 `123123 我们测试一下 要求后续变更`，但 SQLite 最新历史第 35 条显示 raw/final 均为干净文本：`raw_asr_text=123123我们测试一下`、`final_text=123123 我们测试一下`。判断这次更像目标输入框已有旧残留，或某个注入路径完成后目标文本仍带已知幻觉短语。
+- 修复：`DictationTextPolisher.removeKnownASRArtifacts` 暴露为最终出口清扫函数；`AccessibilityInjector.cleanFocusedText` 支持读取当前 focused AXValue、清理后写回并恢复光标。
+- 修复：`AppState.perform` 在 Accessibility 直接写入、CGEvent 直接键入、Pasteboard fallback 成功后都会调用 focused text 清扫，删除目标输入框中残留的 `要求后续变更/更正` 类短语。
+- 验证：`swift test` 37 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：17821。复查最近历史第 36-38 条 raw/final 均不含 `要求后续变更`。
