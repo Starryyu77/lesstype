@@ -102,3 +102,11 @@
 - 验证：`swift test` 23 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：10380。
 - 追加修复：用户澄清“前面说整理正常，后面又说整理不正常”属于后续修正，最终文本应删除前面的旧判断而不是并列矛盾。`polish.zh.md` 新增“后续修正只保留最新判断”规则和示例；`DictationTextPolisher` 新增移除被推翻的“整理正常”判断规则。
 - 验证：`swift test --filter DictationTextPolisherTests` 通过；`swift test` 24 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：17193。
+
+## 2026-05-19 润色收敛、录音时长、动画与插入修复
+
+- 用户反馈润色过度：现在默认策略改为“结构化整理”，保留原表达，不擅自添加内容、解释或扩句；仍保留后续修正规则，例如前面说“整理正常”、后面改口“整理不正常”时删除旧判断。
+- Toggle 模式取消 30 秒自动停止：`AudioRecorder` 在 `maxDurationSeconds <= 0` 时不再创建自动停止 timer；`AppState` 在 Toggle 模式下传入 `0`，Press-to-talk 仍保留配置时长保护。
+- Overlay 增加动画：录音时显示随麦克风音量变化的语音条；本地识别、润色、插入阶段显示对应处理动画。
+- 自动插入 fallback 顺序调整为：Accessibility 直接写入 -> CGEvent Unicode 直接键入 -> Pasteboard/菜单粘贴 -> ResultPanel，避免剪贴板事件“已发送但目标 App 没有真正粘贴”时过早判定成功。
+- 验证：`swift test` 24 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 使用 `Apple Development: 1873964133@qq.com (959UL4UP8J)` 成功签名；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；本机运行 PID：30413。

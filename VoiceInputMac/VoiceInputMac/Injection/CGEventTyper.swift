@@ -3,6 +3,9 @@ import Foundation
 
 final class CGEventTyper {
     func type(_ text: String) throws {
+        guard AXIsProcessTrusted() else {
+            throw AppError.accessibilityPermissionDenied
+        }
         for scalar in text.unicodeScalars {
             var chars = [UniChar(scalar.value)]
             guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
@@ -16,4 +19,3 @@ final class CGEventTyper {
         }
     }
 }
-

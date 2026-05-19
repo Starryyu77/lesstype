@@ -30,6 +30,7 @@ final class AppState: ObservableObject {
     private let llmProvider: LLMProvider
     private let pasteboardInjector: TextInjector
     private let accessibilityInjector: AccessibilityInjector
+    private let eventTyper = CGEventTyper()
     private let activeAppDetector: ActiveAppDetector
     private let selectedTextReader: SelectedTextReader
     private let normalizer = DictionaryNormalizer()
@@ -214,8 +215,13 @@ final class AppState: ObservableObject {
                 message = recordingMessage(for: mode)
                 DictationOverlayPresenter.shared.show(message: message, phase: phase)
                 try await audioRecorder.startRecording(
-                    maxDurationSeconds: config.whisperMaxSegmentSeconds,
+                    maxDurationSeconds: config.hotkeyMode == .toggle ? 0 : config.whisperMaxSegmentSeconds,
                     enableVAD: false,
+                    onMeterLevel: { level in
+                        Task { @MainActor in
+                            DictationOverlayPresenter.shared.updateLevel(level)
+                        }
+                    },
                     onAutoStop: { [weak self] in
                         guard let self else { return }
                         Task { @MainActor in
@@ -448,14 +454,19 @@ final class AppState: ObservableObject {
         } catch {
             do {
                 await activateTargetApp(targetContext)
-                if action.action == "replace_selection" {
-                    try await pasteboardInjector.replaceSelectedText(action.text)
-                } else {
-                    try await pasteboardInjector.insertText(action.text)
-                }
+                try eventTyper.type(action.text)
             } catch {
-                let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                ResultPanelPresenter.shared.show(text: action.text, reason: reason)
+                do {
+                    await activateTargetApp(targetContext)
+                    if action.action == "replace_selection" {
+                        try await pasteboardInjector.replaceSelectedText(action.text)
+                    } else {
+                        try await pasteboardInjector.insertText(action.text)
+                    }
+                } catch {
+                    let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    ResultPanelPresenter.shared.show(text: action.text, reason: reason)
+                }
             }
         }
     }

@@ -15,13 +15,19 @@ final class AudioRecorder: ObservableObject {
     private var didRequestAutoStop = false
     private var recordingStartedAt: Date?
     private var onAutoStop: (() -> Void)?
+    private var onMeterLevel: ((Float) -> Void)?
     private var inputSampleRate: Double = 0
     private var capturedSamples: [Float] = []
     private let captureLock = NSLock()
     private let meterLock = NSLock()
     private var meterUpdatePending = false
 
-    func startRecording(maxDurationSeconds: Int, enableVAD: Bool = false, onAutoStop: (() -> Void)? = nil) async throws {
+    func startRecording(
+        maxDurationSeconds: Int,
+        enableVAD: Bool = false,
+        onMeterLevel: ((Float) -> Void)? = nil,
+        onAutoStop: (() -> Void)? = nil
+    ) async throws {
         guard !isRecording else { return }
         let granted = await requestMicrophonePermission()
         guard granted else {
@@ -30,6 +36,7 @@ final class AudioRecorder: ObservableObject {
 
         self.enableVAD = enableVAD
         self.onAutoStop = onAutoStop
+        self.onMeterLevel = onMeterLevel
         didHearSpeech = false
         silenceStartedAt = nil
         didRequestAutoStop = false
@@ -52,16 +59,20 @@ final class AudioRecorder: ObservableObject {
         try engine.start()
         isRecording = true
 
-        let item = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            if self.isRecording {
-                DispatchQueue.main.async {
-                    self.onAutoStop?()
+        if maxDurationSeconds > 0 {
+            let item = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                if self.isRecording {
+                    DispatchQueue.main.async {
+                        self.onAutoStop?()
+                    }
                 }
             }
+            stopWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(maxDurationSeconds), execute: item)
+        } else {
+            stopWorkItem = nil
         }
-        stopWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(maxDurationSeconds), execute: item)
     }
 
     func stopRecording() throws -> URL {
@@ -75,6 +86,7 @@ final class AudioRecorder: ObservableObject {
         engine.stop()
         isRecording = false
         onAutoStop = nil
+        onMeterLevel = nil
         guard let url = outputURL else {
             throw AppError.asrFailed("Recording output was not created")
         }
@@ -213,6 +225,7 @@ final class AudioRecorder: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.meterLevel = level
+            self.onMeterLevel?(level)
             self.meterLock.lock()
             self.meterUpdatePending = false
             self.meterLock.unlock()
