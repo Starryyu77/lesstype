@@ -9,6 +9,31 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
+resolve_codesign_identity() {
+  if [ -n "${CODESIGN_IDENTITY+x}" ]; then
+    printf '%s\n' "$CODESIGN_IDENTITY"
+    return
+  fi
+
+  local identities
+  identities="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+
+  local identity
+  identity="$(printf '%s\n' "$identities" | awk -F '"' '/"Apple Development:/{print $2; exit}')"
+  if [ -n "$identity" ]; then
+    printf '%s\n' "$identity"
+    return
+  fi
+
+  identity="$(printf '%s\n' "$identities" | awk -F '"' '/"Developer ID Application:/{print $2; exit}')"
+  if [ -n "$identity" ]; then
+    printf '%s\n' "$identity"
+    return
+  fi
+
+  printf '%s\n' "-"
+}
+
 cd "$ROOT_DIR"
 
 swift build -c "$CONFIGURATION"
@@ -26,7 +51,12 @@ if [ -d "$BIN_DIR/${APP_NAME}_${APP_NAME}.bundle" ]; then
 fi
 
 if command -v codesign >/dev/null 2>&1 && [ "${SKIP_CODESIGN:-0}" != "1" ]; then
-  CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
+  CODESIGN_IDENTITY="$(resolve_codesign_identity)"
+  if [ "$CODESIGN_IDENTITY" = "-" ]; then
+    echo "Signing with ad-hoc identity. For stable local permissions, create an Apple Development certificate in Xcode."
+  else
+    echo "Signing with identity: $CODESIGN_IDENTITY"
+  fi
   codesign --force --deep --sign "$CODESIGN_IDENTITY" --entitlements "$ROOT_DIR/Support/VoiceInputMac.entitlements" "$APP_DIR"
 fi
 

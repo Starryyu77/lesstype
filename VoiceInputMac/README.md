@@ -70,9 +70,22 @@ open dist/VoiceInputMac.app
 
 ```bash
 security find-identity -v -p codesigning
-CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)" bash scripts/build_app.sh debug
+bash scripts/build_app.sh debug
 open dist/VoiceInputMac.app
 ```
+
+构建脚本会优先自动使用本机 Keychain 中的 `Apple Development` 证书，其次使用 `Developer ID Application`，都没有时才退回 ad-hoc 签名。也可以手动指定：
+
+```bash
+CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)" bash scripts/build_app.sh debug
+```
+
+只做本机开发不需要先购买 Apple Developer Program。最短路径：
+
+1. 打开 Xcode，登录 Apple ID。
+2. 在 Xcode 的 Accounts / Manage Certificates 中创建 `Apple Development` 证书。
+3. 回到本项目运行 `security find-identity -v -p codesigning`，确认能看到 `Apple Development: ...`。
+4. 重新运行 `bash scripts/build_app.sh debug`，然后对新的 `dist/VoiceInputMac.app` 授权一次麦克风、辅助功能和输入监听。
 
 如果本机没有有效代码签名证书，就先避免频繁重打包；对同一个已打包 `.app` 授权一次后再日常使用。
 
@@ -176,7 +189,7 @@ SQLite 默认位置：
 
 ### 每次都要求重新输入密码授权
 
-这是开发期 ad-hoc 签名的副作用。每次重新构建 `.app` 后，代码签名摘要会变化，macOS TCC 可能把它当成新 App。使用稳定的 `Apple Development` / `Developer ID` 证书签名，或固定使用同一个已授权 `.app`，可以减少重复授权。
+这是开发期 ad-hoc 签名的副作用。每次重新构建 `.app` 后，代码签名摘要会变化，macOS TCC 可能把它当成新 App。只做本机开发时，用 Xcode 创建 `Apple Development` 证书并让 `scripts/build_app.sh` 自动使用它即可；不需要 Developer ID 或 notarization。
 
 ### 无法插入文本
 

@@ -61,3 +61,10 @@
 - 当前本机仍没有有效代码签名身份：`security find-identity -v -p codesigning` 返回 `0 valid identities found`。因此当前只能 ad-hoc 签名，重打包后 TCC 权限可能反复要求重新授权。
 - 验证：`swift test` 21 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 成功；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 成功。
 - 本机已重启为新构建版本，进程 PID：49856。
+
+## 2026-05-19 本机开发签名路径
+
+- 用户明确只做本机开发，不需要先购买 Apple Developer Program、Developer ID 或 notarization。
+- `scripts/build_app.sh` 已改成自动优先选择本机 Keychain 里的 `Apple Development` 代码签名身份；没有时再尝试 `Developer ID Application`；都没有时才退回 ad-hoc `-`。
+- README 已补充本机开发签名路径：在 Xcode 登录 Apple ID，Manage Certificates 创建 `Apple Development`，用 `security find-identity -v -p codesigning` 确认，然后直接运行 `bash scripts/build_app.sh debug`。
+- 当前机器仍无有效身份，脚本验证会输出 ad-hoc fallback 提示；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过。
