@@ -9,7 +9,7 @@ struct VoiceInputApp: App {
         MenuBarExtra {
             MenuBarView(appState: appState)
         } label: {
-            Image(systemName: appState.phase.symbolName)
+            Label("LessType", systemImage: appState.phase.symbolName)
                 .symbolRenderingMode(appState.phase == .recording ? .multicolor : .hierarchical)
         }
 

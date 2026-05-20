@@ -17,6 +17,18 @@ struct GeneralSettingsView: View {
             Toggle("粘贴后恢复剪贴板", isOn: binding(\.restoreClipboardAfterPaste))
             TextField("日志级别", text: binding(\.logLevel))
 
+            Section("词典学习") {
+                Button {
+                    appState.learnLastCorrection()
+                } label: {
+                    Label("学习刚才修改", systemImage: "text.badge.checkmark")
+                }
+
+                Text(appState.learningMessage.isEmpty ? "语音输入后，手动修正一个短词，再点这里确认加入个人词典。" : appState.learningMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             HStack {
                 Button("保存设置") {
                     appState.saveConfig()
@@ -42,4 +54,3 @@ struct GeneralSettingsView: View {
         )
     }
 }
-

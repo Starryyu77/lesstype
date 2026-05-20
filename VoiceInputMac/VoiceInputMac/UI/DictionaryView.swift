@@ -21,6 +21,24 @@ struct DictionaryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("词典学习")
+                        .font(.headline)
+                    Text(appState.learningMessage.isEmpty ? "修改刚才插入的短词后，点这里把纠错写入本地个人词典。" : appState.learningMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    appState.learnLastCorrection()
+                } label: {
+                    Label("学习刚才修改", systemImage: "text.badge.checkmark")
+                }
+            }
+
+            Divider()
+
             HStack {
                 TextField("搜索词条", text: $searchText)
                 Button("刷新") { appState.loadLocalState() }

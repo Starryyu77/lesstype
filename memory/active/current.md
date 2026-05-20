@@ -203,3 +203,5 @@
 - 修复：`DictionaryNormalizer` 现在对词典 written 形式做幂等保护，避免 `Tailwind CSS` 被 `tailwind -> Tailwind CSS` 再次展开成 `Tailwind CSS CSS`。
 - 修复：菜单栏“学习刚才修改”按钮不再因为没有 pending 记录而禁用；始终可见可点，没有可学习内容时显示明确提示。
 - 验证：`swift test` 43 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；已重启本机 App，PID：18514。
+- 用户继续反馈找不到菜单栏/学习入口。修复：菜单栏 Extra 标签从纯图标改为 `LessType` + 状态图标；设置页 General 和 Dictionary 页面也新增“学习刚才修改”按钮与说明，入口不再只依赖顶部菜单栏。
+- 验证：`swift test` 43 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；已重启本机 App，PID：23031。
