@@ -21,6 +21,14 @@ final class DictionaryTests: XCTestCase {
         XCTAssertFalse(normalized.contains("维斯破"))
     }
 
+    func testDictionaryNormalizerDoesNotDuplicateWrittenSuffixes() {
+        let raw = "在这个项目里面，Cursor 和 Tailwind CSS 的配置先不要动"
+        let normalized = DictionaryNormalizer().normalize(raw, entries: DictionaryStore.defaultEntries)
+
+        XCTAssertTrue(normalized.contains("Tailwind CSS"))
+        XCTAssertFalse(normalized.contains("Tailwind CSS CSS"))
+    }
+
     func testDictionaryNormalizerFixesDictationHomophonesAndSpokenPhrases() {
         let raw = "这个差路依然不太正常还有一个问题就是他好像没有办法去对我们说的话进行一个整理"
         let normalized = DictionaryNormalizer().normalize(raw, entries: DictionaryStore.defaultEntries)

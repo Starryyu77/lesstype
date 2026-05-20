@@ -16,7 +16,7 @@ struct DictionaryNormalizer {
                 if form.contains(".") {
                     continue
                 }
-                result = replacing(form, with: entry.written, in: result)
+                result = replacingDictionaryForm(form, with: entry.written, in: result)
             }
         }
 
@@ -49,5 +49,45 @@ struct DictionaryNormalizer {
         }
         let range = NSRange(text.startIndex..., in: text)
         return regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement)
+    }
+
+    private func replacingDictionaryForm(_ needle: String, with replacement: String, in text: String) -> String {
+        let pattern = NSRegularExpression.escapedPattern(for: needle)
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return text.replacingOccurrences(of: needle, with: replacement)
+        }
+
+        var result = ""
+        var cursor = text.startIndex
+        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        for match in matches {
+            guard let matchRange = Range(match.range, in: text) else { continue }
+            result += String(text[cursor..<matchRange.lowerBound])
+            if isAlreadyWrittenForm(needleRange: matchRange, replacement: replacement, in: text) {
+                result += String(text[matchRange])
+            } else {
+                result += replacement
+            }
+            cursor = matchRange.upperBound
+        }
+        result += String(text[cursor...])
+        return result
+    }
+
+    private func isAlreadyWrittenForm(needleRange: Range<String.Index>, replacement: String, in text: String) -> Bool {
+        let matched = String(text[needleRange])
+        guard replacement.lowercased().hasPrefix(matched.lowercased()) else {
+            return false
+        }
+        let suffix = String(replacement.dropFirst(matched.count))
+        guard !suffix.isEmpty else {
+            return false
+        }
+        let suffixEnd = text.index(needleRange.upperBound, offsetBy: suffix.count, limitedBy: text.endIndex) ?? text.endIndex
+        guard suffixEnd <= text.endIndex else {
+            return false
+        }
+        let following = String(text[needleRange.upperBound..<suffixEnd])
+        return following.caseInsensitiveCompare(suffix) == .orderedSame
     }
 }

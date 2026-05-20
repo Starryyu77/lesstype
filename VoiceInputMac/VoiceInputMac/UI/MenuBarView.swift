@@ -31,9 +31,8 @@ struct MenuBarView: View {
             Button {
                 appState.learnLastCorrection()
             } label: {
-                Label("学习刚才修改", systemImage: "text.badge.checkmark")
+                Label("学习刚才修改", systemImage: appState.canLearnLastCorrection ? "text.badge.checkmark" : "text.badge.plus")
             }
-            .disabled(!appState.canLearnLastCorrection)
 
             if !appState.learningMessage.isEmpty {
                 Text(appState.learningMessage)

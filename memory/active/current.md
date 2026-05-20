@@ -199,3 +199,7 @@
 - 确认后写入本地 `dictionary_entries`：如果 written 已存在，则把用户修正前的写法加入 aliases，并把 priority 提升到 20；不会静默学习。
 - 新增测试：`DictionaryLearningSuggesterTests` 覆盖 `Swift You Eye -> SwiftUI`、`Transformer Xr -> Transformer-XL`、无修改和整句大改不建议；`DictionaryTests` 覆盖技术词发音变体和 learned alias upsert。
 - 验证：`swift test` 42 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；已重启本机 App，PID：11395。
+- 用户实测反馈：`Tailwind CSS CSS` 重复，且没有看到“学习刚才修改”入口。
+- 修复：`DictionaryNormalizer` 现在对词典 written 形式做幂等保护，避免 `Tailwind CSS` 被 `tailwind -> Tailwind CSS` 再次展开成 `Tailwind CSS CSS`。
+- 修复：菜单栏“学习刚才修改”按钮不再因为没有 pending 记录而禁用；始终可见可点，没有可学习内容时显示明确提示。
+- 验证：`swift test` 43 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；已重启本机 App，PID：18514。
