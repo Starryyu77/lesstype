@@ -205,3 +205,6 @@
 - 验证：`swift test` 43 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；已重启本机 App，PID：18514。
 - 用户继续反馈找不到菜单栏/学习入口。修复：菜单栏 Extra 标签从纯图标改为 `LessType` + 状态图标；设置页 General 和 Dictionary 页面也新增“学习刚才修改”按钮与说明，入口不再只依赖顶部菜单栏。
 - 验证：`swift test` 43 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；已重启本机 App，PID：23031。
+- 追加收口：学习确认弹窗新增可编辑字段 `spoken/written`，按钮包含“加入词典 / 编辑后再加入 / 取消”，用于修正 diff 截词不准后再保存。
+- 追加收口：learned 词条现在通过 `scope` 标记为 `learned`；Dictionary 页新增 `learned` badge 和“只看学习词条”筛选，方便清理误学内容。
+- 验证：`swift test` 44 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；已重启本机 App，PID：30977。

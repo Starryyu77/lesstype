@@ -79,6 +79,7 @@ final class DictionaryStore {
         }) {
             entries[index].written = written
             entries[index].priority = max(entries[index].priority, 20)
+            entries[index].scope = Self.markLearned(scope: entries[index].scope)
             try update(entries[index])
             return
         }
@@ -90,11 +91,22 @@ final class DictionaryStore {
                 entries[index].aliases.append(spoken)
             }
             entries[index].priority = max(entries[index].priority, 20)
+            entries[index].scope = Self.markLearned(scope: entries[index].scope)
             try update(entries[index])
             return
         }
 
-        try insert(DictionaryEntry(id: nil, spoken: spoken, written: written, aliases: [], scope: "global", priority: 20))
+        try insert(DictionaryEntry(id: nil, spoken: spoken, written: written, aliases: [], scope: "global,learned", priority: 20))
+    }
+
+    private static func markLearned(scope: String) -> String {
+        let trimmed = scope.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "learned" }
+        let tokens = trimmed.split { $0 == "," || $0 == " " || $0 == ";" }
+        guard !tokens.contains(where: { $0.caseInsensitiveCompare("learned") == .orderedSame }) else {
+            return trimmed
+        }
+        return "\(trimmed),learned"
     }
 
     private func isMissingDefault(_ entry: DictionaryEntry) throws -> Bool {

@@ -619,7 +619,7 @@ final class AppState: ObservableObject {
                     learningMessage = "没有检测到适合加入词典的短词修改。"
                     return
                 }
-                guard DictionaryLearningPresenter.shared.confirm(
+                guard let learnedSuggestion = DictionaryLearningPresenter.shared.confirm(
                     suggestion: suggestion,
                     appName: pending.context.activeApp
                 ) else {
@@ -627,10 +627,10 @@ final class AppState: ObservableObject {
                     return
                 }
 
-                try dictionaryStore.upsertLearnedEntry(spoken: suggestion.spoken, written: suggestion.written)
+                try dictionaryStore.upsertLearnedEntry(spoken: learnedSuggestion.spoken, written: learnedSuggestion.written)
                 dictionaryEntries = try dictionaryStore.fetchAll()
                 pendingDictionaryLearning = nil
-                learningMessage = "已加入词典：\(suggestion.spoken) → \(suggestion.written)"
+                learningMessage = "已加入词典：\(learnedSuggestion.spoken) → \(learnedSuggestion.written)"
             } catch {
                 learningMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }

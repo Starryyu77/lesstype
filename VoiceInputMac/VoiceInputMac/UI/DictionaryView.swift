@@ -9,10 +9,12 @@ struct DictionaryView: View {
     @State private var scope = "global"
     @State private var priority = 5
     @State private var searchText = ""
+    @State private var showLearnedOnly = false
 
     var filteredEntries: [DictionaryEntry] {
-        guard !searchText.isEmpty else { return appState.dictionaryEntries }
-        return appState.dictionaryEntries.filter {
+        let scoped = showLearnedOnly ? appState.dictionaryEntries.filter(\.isLearned) : appState.dictionaryEntries
+        guard !searchText.isEmpty else { return scoped }
+        return scoped.filter {
             $0.spoken.localizedCaseInsensitiveContains(searchText) ||
                 $0.written.localizedCaseInsensitiveContains(searchText) ||
                 $0.aliasesText.localizedCaseInsensitiveContains(searchText)
@@ -41,6 +43,8 @@ struct DictionaryView: View {
 
             HStack {
                 TextField("搜索词条", text: $searchText)
+                Toggle("只看学习词条", isOn: $showLearnedOnly)
+                    .toggleStyle(.checkbox)
                 Button("刷新") { appState.loadLocalState() }
             }
 
@@ -53,6 +57,15 @@ struct DictionaryView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                    }
+                    if entry.isLearned {
+                        Text("learned")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.12))
+                            .foregroundStyle(Color.accentColor)
+                            .clipShape(RoundedRectangle(cornerRadius: 5))
                     }
                     Spacer()
                     Text("P\(entry.priority)")

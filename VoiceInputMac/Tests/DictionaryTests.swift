@@ -49,6 +49,19 @@ final class DictionaryTests: XCTestCase {
         XCTAssertEqual(entries.first?.written, "SwiftUI")
         XCTAssertEqual(entries.first?.priority, 20)
         XCTAssertTrue(entries.first?.aliases.contains("Swift You Eye") == true)
+        XCTAssertTrue(entries.first?.isLearned == true)
+    }
+
+    func testNewLearnedEntryIsMarkedLearned() throws {
+        let store = try makeTemporaryDictionaryStore()
+
+        try store.upsertLearnedEntry(spoken: "Transformer Xr", written: "Transformer-XL")
+
+        let entries = try store.fetchAll()
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.spoken, "Transformer Xr")
+        XCTAssertEqual(entries.first?.written, "Transformer-XL")
+        XCTAssertTrue(entries.first?.isLearned == true)
     }
 
     private func makeTemporaryDictionaryStore() throws -> DictionaryStore {

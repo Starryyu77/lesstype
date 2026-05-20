@@ -12,9 +12,14 @@ struct DictionaryEntry: Codable, Identifiable, Equatable {
         aliases.joined(separator: ", ")
     }
 
+    var isLearned: Bool {
+        scope
+            .split { $0 == "," || $0 == " " || $0 == ";" }
+            .contains { $0.caseInsensitiveCompare("learned") == .orderedSame }
+    }
+
     var promptLine: String {
         let aliasText = aliases.isEmpty ? "" : " aliases=\(aliases.joined(separator: "/"))"
         return "- \(spoken) -> \(written)\(aliasText)"
     }
 }
-
