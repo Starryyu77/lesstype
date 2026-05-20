@@ -180,3 +180,8 @@
 - `edit_selection.zh.md` 更新重点：默认 `replace_selection`，增强“委婉一点 / 自然一点 / 改顺一点 / 列成要点”等选中文本编辑指令，并明确完整 JSON schema。
 - 新增/更新 prompt 回归：覆盖“不要输出逐字稿”“忠于事实的智能改写”“指令外壳去除”“选中文本默认 replace_selection”；`prompt_cases.yaml` 增加改口保留最新判断、回复指令去外壳、笔记步骤格式化案例。
 - 验证：`swift test` 36 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 使用 Apple Development 成功签名；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过。
+- 用户首轮实测反馈：整体可用，但 prompt 过度删除开头与任务意图，例如在 AI/代码工具里把“帮我写一下”删掉，导致输入变成间接名词短语。
+- 追加修复：`polish.zh.md` 明确区分真人转述指令与 AI/代码工具任务输入。WeChat/邮件里“帮我跟他说/告诉客户”应去外壳；Codex/ChatGPT/Cursor/VS Code/Xcode 等场景里“帮我写一下/分析/设计/总结”应保留任务意图。
+- 追加规则：保留有语义的开头和主体，例如“我/我们/你/客户/这个需求/这个方案/下周一”，不要为了简洁删掉关键主语或语义锚点。
+- 追加测试案例：Cursor 技术方案保留“帮我写一下”；Codex 分析任务保留“帮我分析一下”；聊天转述仍去掉“帮我跟他说一下”。
+- 验证：`swift test` 36 个 XCTest 全部通过；重新构建并使用 Apple Development 签名，`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；已重启本机 App，PID：83636。

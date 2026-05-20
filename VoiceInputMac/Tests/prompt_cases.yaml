@@ -2,6 +2,7 @@
   raw: "呃我们明天不对下周一下午三点开会"
   app: "WeChat"
   expected_contains:
+    - "我们"
     - "下周一下午三点"
   expected_not_contains:
     - "呃"
@@ -44,9 +45,26 @@
   raw: "帮我写一下这个 cursor 里面 swift ui 和 whisper 点 cpp 的集成方案"
   app: "Cursor"
   expected_contains:
+    - "帮我写一下"
     - "Cursor"
     - "SwiftUI"
     - "whisper.cpp"
+
+- name: ai_tool_preserves_task_intent
+  raw: "帮我分析一下这个热键为什么 fn 可以但是 option 不行"
+  app: "Codex"
+  expected_contains:
+    - "帮我分析一下"
+    - "Fn"
+    - "Option"
+
+- name: chat_removes_handoff_shell
+  raw: "帮我跟他说一下我们下周一下午三点开会"
+  app: "WeChat"
+  expected_contains:
+    - "我们下周一下午三点开会"
+  expected_not_contains:
+    - "帮我跟他说一下"
 
 - name: revised_judgement_keeps_latest
   raw: "前面先说看起来整理是正常的然后后面又说我感觉其实整理也不太正常"

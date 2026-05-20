@@ -35,8 +35,11 @@ final class PromptTests: XCTestCase {
         XCTAssertTrue(prompt.system.contains("不要输出逐字稿"))
         XCTAssertTrue(prompt.system.contains("忠于事实的智能改写"))
         XCTAssertTrue(prompt.system.contains("指令外壳"))
+        XCTAssertTrue(prompt.system.contains("保留有语义的开头和主体"))
+        XCTAssertTrue(prompt.system.contains("AI/代码/工作工具"))
         XCTAssertTrue(prompt.system.contains("\"action\": \"insert | replace_selection | show_panel | noop\""))
         XCTAssertTrue(prompt.system.contains("这个需求我今天做不完，可能要明天上午给你。"))
+        XCTAssertTrue(prompt.system.contains("帮我写一下 Cursor 里 SwiftUI 和 Whisper.cpp 的集成方案。"))
     }
 
     func testEditSelectionPromptHandlesToneAndReplacementAction() throws {
