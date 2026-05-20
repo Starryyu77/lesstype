@@ -171,3 +171,12 @@
 - 修复：撤销 `要求后续变更` 类 ASR 文本过滤，`DictationTextPolisher` 不再删除用户实际说出的该短语；相关测试改为确认保留用户实际说出的 placeholder 文本。
 - 修复：移除插入后 focused text 清扫，不再读取并重写目标输入框来删除 placeholder；对 Codex/ChatGPT/Electron 类目标改成 pasteboard-first，失败再 CGEvent，最后才 AX，避免键盘事件接受 autocomplete suggestion。
 - 验证：`swift test` 34 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；本机运行 PID：29807。
+
+## 2026-05-20 润色任务重定义分支
+
+- 新建分支：`polish/voice-rewrite`，从 `main` 切出，不包含 `ui/settings-redesign` 的设置页视觉改动。
+- 参考 Typeless 官网公开定位后，将润色目标从“结构化整理/轻清理”改为“忠于事实的智能改写”：不是逐字稿，也不是自由扩写，而是把自然说话转换成可直接发送、记录或粘贴的成稿。
+- `polish.zh.md` 更新重点：删除口头禅、去重复、处理后续改口、去掉“帮我……”指令外壳、自动格式化列表、按 App 场景调整风格、保留代码/技术符号、使用个人词典，并明确完整 JSON schema。
+- `edit_selection.zh.md` 更新重点：默认 `replace_selection`，增强“委婉一点 / 自然一点 / 改顺一点 / 列成要点”等选中文本编辑指令，并明确完整 JSON schema。
+- 新增/更新 prompt 回归：覆盖“不要输出逐字稿”“忠于事实的智能改写”“指令外壳去除”“选中文本默认 replace_selection”；`prompt_cases.yaml` 增加改口保留最新判断、回复指令去外壳、笔记步骤格式化案例。
+- 验证：`swift test` 36 个 XCTest 全部通过；`bash scripts/build_app.sh debug` 使用 Apple Development 成功签名；`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过。

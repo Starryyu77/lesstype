@@ -11,7 +11,11 @@
   raw: "帮我跟他说一下就是这个需求我今天做不完可能要明天上午给你"
   app: "WeChat"
   expected_style: "short_message"
+  expected_contains:
+    - "这个需求"
+    - "明天上午"
   expected_not_contains:
+    - "帮我跟他说一下"
     - "就是"
 
 - name: email_generation
@@ -44,6 +48,33 @@
     - "SwiftUI"
     - "whisper.cpp"
 
+- name: revised_judgement_keeps_latest
+  raw: "前面先说看起来整理是正常的然后后面又说我感觉其实整理也不太正常"
+  app: "Codex"
+  expected_contains:
+    - "整理其实不太正常"
+  expected_not_contains:
+    - "整理是正常的"
+
+- name: compose_without_instruction_shell
+  raw: "你帮我回复他说我今天来不及看完明天上午给结论"
+  app: "Slack"
+  expected_contains:
+    - "今天来不及看完"
+    - "明天上午给结论"
+  expected_not_contains:
+    - "你帮我回复他说"
+
+- name: notes_auto_format_steps
+  raw: "帮我整理一下今天要做三个事情第一个修复插入第二个调整润色第三个跑测试"
+  app: "Notion"
+  expected_contains:
+    - "修复插入"
+    - "调整润色"
+    - "跑测试"
+  expected_not_contains:
+    - "第一个"
+
 - name: cancel_command
   raw: "算了不要了"
   app: "WeChat"
@@ -56,4 +87,3 @@
     - "录音"
     - "识别"
     - "润色"
-

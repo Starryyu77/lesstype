@@ -14,10 +14,46 @@ final class PromptTests: XCTestCase {
             rawTranscript: "呃我们下周一开会"
         )
 
-        XCTAssertTrue(prompt.system.contains("语音输入法的文本后处理器"))
+        XCTAssertTrue(prompt.system.contains("本地语音输入助手的文本改写器"))
         XCTAssertTrue(prompt.user.contains("当前 App: WeChat"))
         XCTAssertTrue(prompt.user.contains("Typeless"))
         XCTAssertTrue(prompt.user.contains("呃我们下周一开会"))
     }
-}
 
+    func testDictationPromptAsksForSmartRewriteNotTranscript() throws {
+        let prompt = try PromptBuilder().build(
+            mode: .dictation,
+            activeApp: "WeChat",
+            windowTitle: "Chat",
+            selectedText: "",
+            contextBefore: "",
+            personalDictionary: DictionaryStore.defaultEntries,
+            styleProfile: StyleProfileStore.defaultProfiles.first,
+            rawTranscript: "帮我跟他说一下就是这个需求我今天做不完可能要明天上午给你"
+        )
+
+        XCTAssertTrue(prompt.system.contains("不要输出逐字稿"))
+        XCTAssertTrue(prompt.system.contains("忠于事实的智能改写"))
+        XCTAssertTrue(prompt.system.contains("指令外壳"))
+        XCTAssertTrue(prompt.system.contains("\"action\": \"insert | replace_selection | show_panel | noop\""))
+        XCTAssertTrue(prompt.system.contains("这个需求我今天做不完，可能要明天上午给你。"))
+    }
+
+    func testEditSelectionPromptHandlesToneAndReplacementAction() throws {
+        let prompt = try PromptBuilder().build(
+            mode: .editSelection,
+            activeApp: "Mail",
+            windowTitle: "Draft",
+            selectedText: "这个功能不好用。",
+            contextBefore: "",
+            personalDictionary: DictionaryStore.defaultEntries,
+            styleProfile: StyleProfileStore.defaultProfiles.first,
+            rawTranscript: "改得委婉一点"
+        )
+
+        XCTAssertTrue(prompt.system.contains("action 默认使用 replace_selection"))
+        XCTAssertTrue(prompt.system.contains("改得委婉一点"))
+        XCTAssertTrue(prompt.system.contains("不要添加原文没有的信息"))
+        XCTAssertTrue(prompt.user.contains("选中文本:\n这个功能不好用。"))
+    }
+}
