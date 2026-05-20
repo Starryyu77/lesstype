@@ -10,7 +10,32 @@ final class SelectedTextReader {
         return try readViaClipboard()
     }
 
+    func readFocusedText() throws -> String {
+        guard let text = try readFocusedValue(), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AppError.selectedTextUnavailable
+        }
+        return text
+    }
+
     private func readViaAccessibility() throws -> String {
+        let element = try focusedElement()
+        var selected: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute as CFString, &selected) == .success else {
+            throw AppError.selectedTextUnavailable
+        }
+        return selected as? String ?? ""
+    }
+
+    private func readFocusedValue() throws -> String? {
+        let element = try focusedElement()
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success else {
+            throw AppError.selectedTextUnavailable
+        }
+        return value as? String
+    }
+
+    private func focusedElement() throws -> AXUIElement {
         guard AccessibilityPermission.isTrusted(prompt: true) else {
             throw AppError.accessibilityPermissionDenied
         }
@@ -20,11 +45,7 @@ final class SelectedTextReader {
               let element = focused else {
             throw AppError.selectedTextUnavailable
         }
-        var selected: CFTypeRef?
-        guard AXUIElementCopyAttributeValue((element as! AXUIElement), kAXSelectedTextAttribute as CFString, &selected) == .success else {
-            throw AppError.selectedTextUnavailable
-        }
-        return selected as? String ?? ""
+        return element as! AXUIElement
     }
 
     private func readViaClipboard() throws -> String {

@@ -65,6 +65,38 @@ final class DictionaryStore {
         try database.execute("DELETE FROM dictionary_entries WHERE id = ?", bindings: [String(id)])
     }
 
+    func upsertLearnedEntry(spoken rawSpoken: String, written rawWritten: String) throws {
+        let spoken = rawSpoken.trimmingCharacters(in: .whitespacesAndNewlines)
+        let written = rawWritten.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !spoken.isEmpty, !written.isEmpty, spoken.caseInsensitiveCompare(written) != .orderedSame else {
+            return
+        }
+
+        var entries = try fetchAll()
+        if let index = entries.firstIndex(where: { entry in
+            entry.spoken.caseInsensitiveCompare(spoken) == .orderedSame ||
+                entry.aliases.contains(where: { $0.caseInsensitiveCompare(spoken) == .orderedSame })
+        }) {
+            entries[index].written = written
+            entries[index].priority = max(entries[index].priority, 20)
+            try update(entries[index])
+            return
+        }
+
+        if let index = entries.firstIndex(where: { $0.written.caseInsensitiveCompare(written) == .orderedSame }) {
+            let alreadyKnown = entries[index].spoken.caseInsensitiveCompare(spoken) == .orderedSame ||
+                entries[index].aliases.contains(where: { $0.caseInsensitiveCompare(spoken) == .orderedSame })
+            if !alreadyKnown {
+                entries[index].aliases.append(spoken)
+            }
+            entries[index].priority = max(entries[index].priority, 20)
+            try update(entries[index])
+            return
+        }
+
+        try insert(DictionaryEntry(id: nil, spoken: spoken, written: written, aliases: [], scope: "global", priority: 20))
+    }
+
     private func isMissingDefault(_ entry: DictionaryEntry) throws -> Bool {
         let rows = try database.query(
             "SELECT id FROM dictionary_entries WHERE spoken = ? OR written = ? LIMIT 1",

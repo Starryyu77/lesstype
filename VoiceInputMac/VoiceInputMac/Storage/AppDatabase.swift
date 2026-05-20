@@ -24,6 +24,10 @@ final class AppDatabase {
         return try AppDatabase(url: dir.appendingPathComponent("VoiceInputMac.sqlite3"))
     }
 
+    static func open(url: URL) throws -> AppDatabase {
+        try AppDatabase(url: url)
+    }
+
     func execute(_ sql: String, bindings: [String?] = []) throws {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
@@ -130,4 +134,3 @@ final class AppDatabase {
 }
 
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-

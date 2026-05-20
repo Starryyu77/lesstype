@@ -17,6 +17,8 @@ final class AppState: ObservableObject {
     @Published var llmCheckMessage: String = ""
     @Published var lastHotkeyEvent: String = "尚未捕获按键事件"
     @Published var hotkeySettingsMessage: String = ""
+    @Published var learningMessage: String = ""
+    @Published private(set) var pendingDictionaryLearning: PendingDictionaryLearning?
 
     let database: AppDatabase
     let historyStore: HistoryStore
@@ -36,6 +38,7 @@ final class AppState: ObservableObject {
     private let selectedTextReader: SelectedTextReader
     private let normalizer = DictionaryNormalizer()
     private let textPolisher = DictationTextPolisher()
+    private let learningSuggester = DictionaryLearningSuggester()
     private let commandRouter = CommandRouter()
     private let hotKeyManager = HotKeyManager()
 
@@ -44,6 +47,11 @@ final class AppState: ObservableObject {
     private var appContextAtRecordingStart: ActiveAppContext?
     private var recordingStartedAt: Date?
     private var isPipelineRunning = false
+
+    var canLearnLastCorrection: Bool {
+        guard let pendingDictionaryLearning else { return false }
+        return !pendingDictionaryLearning.isExpired
+    }
 
     private init() {
         do {
@@ -384,6 +392,7 @@ final class AppState: ObservableObject {
         message = "正在插入文本"
         DictationOverlayPresenter.shared.show(message: message, phase: phase)
         try await perform(action: action, targetContext: appContext)
+        rememberLearningCandidate(action: action, context: appContext)
 
         let latency = Int(Date().timeIntervalSince(pipelineStart) * 1000)
         if config.saveHistory {
@@ -585,6 +594,61 @@ final class AppState: ObservableObject {
 
     func refreshHistory() {
         historyItems = (try? historyStore.recent(limit: 100)) ?? []
+    }
+
+    func learnLastCorrection() {
+        guard let pending = pendingDictionaryLearning else {
+            learningMessage = "暂无可学习的上次输出。"
+            return
+        }
+        guard !pending.isExpired else {
+            pendingDictionaryLearning = nil
+            learningMessage = "上次输出已过期，请重新输入后再学习。"
+            return
+        }
+
+        Task { @MainActor in
+            do {
+                learningMessage = "正在读取刚才的输入框..."
+                await activateTargetApp(pending.context)
+                let editedText = try selectedTextReader.readFocusedText()
+                guard let suggestion = learningSuggester.suggestion(
+                    originalText: pending.originalText,
+                    editedText: editedText
+                ) else {
+                    learningMessage = "没有检测到适合加入词典的短词修改。"
+                    return
+                }
+                guard DictionaryLearningPresenter.shared.confirm(
+                    suggestion: suggestion,
+                    appName: pending.context.activeApp
+                ) else {
+                    learningMessage = "已取消学习。"
+                    return
+                }
+
+                try dictionaryStore.upsertLearnedEntry(spoken: suggestion.spoken, written: suggestion.written)
+                dictionaryEntries = try dictionaryStore.fetchAll()
+                pendingDictionaryLearning = nil
+                learningMessage = "已加入词典：\(suggestion.spoken) → \(suggestion.written)"
+            } catch {
+                learningMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    private func rememberLearningCandidate(action: LLMAction, context: ActiveAppContext) {
+        guard (action.action == "insert" || action.action == "replace_selection"),
+              action.confidence >= 0.5,
+              !action.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        pendingDictionaryLearning = PendingDictionaryLearning(
+            originalText: action.text,
+            context: context,
+            createdAt: Date()
+        )
+        learningMessage = "已记录刚才输出。你修改后可点“学习刚才修改”。"
     }
 
     private func handle(_ error: Error) async {

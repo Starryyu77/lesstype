@@ -189,3 +189,13 @@
 - 追加修复：`polish.zh.md` 明确要求中文句子里的英文产品名/技术词两侧保留空格，例如 `Cursor 里 SwiftUI 和 Whisper.cpp 的集成方案`；同时禁止把“集成方案/基础方案/实现方案/调试计划”等任务名随意替换成近义词。
 - 追加测试：`technical_terms` 现在要求包含 `集成方案`，并禁止 `基础方案` 与 `Cursor里面`。
 - 验证：`swift test` 36 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；已重启本机 App，PID：95811。
+
+## 2026-05-20 词典学习与技术词模糊纠错
+
+- 新建分支：`feature/dictionary-learning`，从 `polish/voice-rewrite` 切出。
+- 技术词模糊归一化增强：`swift you eye` / `swift u i` / `swift ui` -> `SwiftUI`；`维斯破 cpp` / `威斯破 cpp` / `维斯珀 cpp` / `whisper cpp` -> `whisper.cpp`；`cursor` -> `Cursor`。
+- 新增确认式记忆：插入成功后只记录本次最终输出和目标 App，不后台持续读取用户输入；菜单栏新增“学习刚才修改”。
+- 用户点击“学习刚才修改”时，App 会重新激活刚才目标 App，只读取当前 focused 输入框文本，与上次输出做短词 diff；如果像技术词纠错，会弹窗询问是否加入个人词典。
+- 确认后写入本地 `dictionary_entries`：如果 written 已存在，则把用户修正前的写法加入 aliases，并把 priority 提升到 20；不会静默学习。
+- 新增测试：`DictionaryLearningSuggesterTests` 覆盖 `Swift You Eye -> SwiftUI`、`Transformer Xr -> Transformer-XL`、无修改和整句大改不建议；`DictionaryTests` 覆盖技术词发音变体和 learned alias upsert。
+- 验证：`swift test` 42 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；已重启本机 App，PID：11395。

@@ -28,6 +28,20 @@ struct MenuBarView: View {
                 Label("编辑选中文本", systemImage: "text.cursor")
             }
 
+            Button {
+                appState.learnLastCorrection()
+            } label: {
+                Label("学习刚才修改", systemImage: "text.badge.checkmark")
+            }
+            .disabled(!appState.canLearnLastCorrection)
+
+            if !appState.learningMessage.isEmpty {
+                Text(appState.learningMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+
             Divider()
 
             Button {
