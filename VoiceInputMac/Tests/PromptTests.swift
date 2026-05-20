@@ -37,6 +37,8 @@ final class PromptTests: XCTestCase {
         XCTAssertTrue(prompt.system.contains("指令外壳"))
         XCTAssertTrue(prompt.system.contains("保留有语义的开头和主体"))
         XCTAssertTrue(prompt.system.contains("AI/代码/工作工具"))
+        XCTAssertTrue(prompt.system.contains("不要把“集成方案”“基础方案”“实现方案”“调试计划”等任务名随意替换成近义词"))
+        XCTAssertTrue(prompt.system.contains("不要写成“Cursor里面SwiftUI和Whisper.cpp”"))
         XCTAssertTrue(prompt.system.contains("\"action\": \"insert | replace_selection | show_panel | noop\""))
         XCTAssertTrue(prompt.system.contains("这个需求我今天做不完，可能要明天上午给你。"))
         XCTAssertTrue(prompt.system.contains("帮我写一下 Cursor 里 SwiftUI 和 Whisper.cpp 的集成方案。"))

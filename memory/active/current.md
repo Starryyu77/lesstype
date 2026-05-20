@@ -185,3 +185,7 @@
 - 追加规则：保留有语义的开头和主体，例如“我/我们/你/客户/这个需求/这个方案/下周一”，不要为了简洁删掉关键主语或语义锚点。
 - 追加测试案例：Cursor 技术方案保留“帮我写一下”；Codex 分析任务保留“帮我分析一下”；聊天转述仍去掉“帮我跟他说一下”。
 - 验证：`swift test` 36 个 XCTest 全部通过；重新构建并使用 Apple Development 签名，`codesign --verify --deep --strict --verbose=2 dist/VoiceInputMac.app` 通过；已重启本机 App，PID：83636。
+- 用户第二轮实测：会议句基本正确；AI 工具任务已保留“帮我写下”，但出现 `Cursor里面SwiftUI...基础方案` 这种中英混排不自然和任务名近义替换。
+- 追加修复：`polish.zh.md` 明确要求中文句子里的英文产品名/技术词两侧保留空格，例如 `Cursor 里 SwiftUI 和 Whisper.cpp 的集成方案`；同时禁止把“集成方案/基础方案/实现方案/调试计划”等任务名随意替换成近义词。
+- 追加测试：`technical_terms` 现在要求包含 `集成方案`，并禁止 `基础方案` 与 `Cursor里面`。
+- 验证：`swift test` 36 个 XCTest 全部通过；Apple Development 签名构建和 `codesign --verify` 通过；已重启本机 App，PID：95811。

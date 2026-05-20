@@ -49,6 +49,10 @@
     - "Cursor"
     - "SwiftUI"
     - "whisper.cpp"
+    - "集成方案"
+  expected_not_contains:
+    - "基础方案"
+    - "Cursor里面"
 
 - name: ai_tool_preserves_task_intent
   raw: "帮我分析一下这个热键为什么 fn 可以但是 option 不行"
